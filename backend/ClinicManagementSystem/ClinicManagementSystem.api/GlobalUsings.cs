@@ -1,4 +1,9 @@
 ﻿global using ClinicManagementSystem.api.Models;
-global using Microsoft.AspNetCore.Http;
 global using Microsoft.AspNetCore.Mvc;
 global using ClinicManagementSystem.api.Services;
+global using ClinicManagementSystem.api.Contracts.Request;
+global using FluentValidation;
+global using FluentValidation.AspNetCore;
+global using Mapster;
+global using MapsterMapper;
+global using System.Reflection;
