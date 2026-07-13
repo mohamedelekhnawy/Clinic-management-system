@@ -1,6 +1,9 @@
 using ClinicManagementSystem.api.Services;
+using Mapster;
+using MapsterMapper;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Identity.Web;
+using System.Reflection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,7 +15,13 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+// Mapster configuration
+var mappingConfig = TypeAdapterConfig.GlobalSettings;
+mappingConfig.Scan(Assembly.GetExecutingAssembly());
+builder.Services.AddSingleton<IMapper>(new Mapper(mappingConfig));
 
+
+// DI    
 builder.Services.AddScoped<IClinicService, ClinicService>();
 
 var app = builder.Build();

@@ -1,5 +1,8 @@
-﻿using ClinicManagementSystem.api.Models;
+﻿using ClinicManagementSystem.api.Contracts.Request;
+using ClinicManagementSystem.api.Contracts.Responce;
+using ClinicManagementSystem.api.Models;
 using ClinicManagementSystem.api.Services;
+using Mapster;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicManagementSystem.api.Controllers
@@ -18,24 +21,31 @@ namespace ClinicManagementSystem.api.Controllers
         [HttpGet ("")]
         public IActionResult GetAll()
         {
-            return Ok(_clinicService.GetAll());
+            var clinics = _clinicService.GetAll();
+            var response = clinics.Adapt<List<ClinicResponse>>();
+            return Ok(response);
         }
         [HttpGet("{id}")]
         public IActionResult Get(int id)
         {
             var clinic = _clinicService.Get(id);
-            return clinic is null ? NotFound() : Ok(clinic);
+            if (clinic == null)
+                return NotFound();
+
+            var response = clinic.Adapt<ClinicResponse>();
+            return Ok(response);
         }
+
         [HttpPost("")]
-        public IActionResult Add(Clinic request)
+        public IActionResult Add(CreateClinicRequest request)
         {
-            var newClinic = _clinicService.Add(request);
+            var newClinic = _clinicService.Add(request.Adapt<Clinic>());
             return CreatedAtAction(nameof(Get), new{ id= newClinic.Id },newClinic);
         }
         [HttpPut("{id}")]
-        public IActionResult Update(int id, Clinic request)
+        public IActionResult Update(int id, CreateClinicRequest request)
         {
-            var isUpdated = _clinicService.Update(id, request);
+            var isUpdated = _clinicService.Update(id, request.Adapt<Clinic>());
             return isUpdated ? NoContent() : NotFound();
         }
         [HttpDelete("{id}")]
