@@ -10,5 +10,5 @@
         DateTime CloseTime,
         DateTime CreatedAt,
         DateTime UpdatedAt
-        );
+    );
 }

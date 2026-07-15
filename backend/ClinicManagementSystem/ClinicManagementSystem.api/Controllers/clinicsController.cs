@@ -1,34 +1,29 @@
-﻿using ClinicManagementSystem.api.Contracts.Request;
-using ClinicManagementSystem.api.Contracts.Responce;
-using ClinicManagementSystem.api.Models;
-using ClinicManagementSystem.api.Services;
-using Mapster;
-using Microsoft.AspNetCore.Mvc;
-
+﻿using ClinicManagementSystem.api.Contracts.Responce;
 namespace ClinicManagementSystem.api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class clinicsController : ControllerBase
+    public class ClinicsController : ControllerBase
     {
         private readonly IClinicService _clinicService;
 
-        public clinicsController(IClinicService clinicService)
+        public ClinicsController(IClinicService clinicService)
         {
             _clinicService = clinicService;
         }
 
-        [HttpGet ("")]
-        public IActionResult GetAll()
+        [HttpGet("")]
+        public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
-            var clinics = _clinicService.GetAll();
+            var clinics = await _clinicService.GetAllAsync(cancellationToken);
             var response = clinics.Adapt<List<ClinicResponse>>();
             return Ok(response);
         }
+
         [HttpGet("{id}")]
-        public IActionResult Get(int id)
+        public async Task<IActionResult> Get(int id, CancellationToken cancellationToken)
         {
-            var clinic = _clinicService.Get(id);
+            var clinic =await _clinicService.GetAsync(id, cancellationToken);
             if (clinic == null)
                 return NotFound();
 
@@ -37,21 +32,23 @@ namespace ClinicManagementSystem.api.Controllers
         }
 
         [HttpPost("")]
-        public IActionResult Add(CreateClinicRequest request)
+        public async Task<IActionResult> Add(CreateClinicRequest request, CancellationToken cancellationToken)
         {
-            var newClinic = _clinicService.Add(request.Adapt<Clinic>());
-            return CreatedAtAction(nameof(Get), new{ id= newClinic.Id },newClinic);
+            var newClinic = await _clinicService.AddAsync(request.Adapt<Clinic>(),cancellationToken);
+            return CreatedAtAction(nameof(Get), new { id = newClinic.Id }, newClinic);
         }
+
         [HttpPut("{id}")]
-        public IActionResult Update(int id, CreateClinicRequest request)
+        public async Task<IActionResult> Update(int id, CreateClinicRequest request,CancellationToken cancellationToken)
         {
-            var isUpdated = _clinicService.Update(id, request.Adapt<Clinic>());
+            var isUpdated =await _clinicService.UpdateAsync(id, request.Adapt<Clinic>(),cancellationToken);
             return isUpdated ? NoContent() : NotFound();
         }
+
         [HttpDelete("{id}")]
-        public IActionResult Delete(int id)
+        public async Task<IActionResult> Delete(int id)
         {
-            var isDeleted = _clinicService.Delete(id);
+            var isDeleted =await _clinicService.DeleteAsync(id);
             return isDeleted ? NoContent() : NotFound();
         }
 

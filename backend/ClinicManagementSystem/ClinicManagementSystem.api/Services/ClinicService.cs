@@ -1,33 +1,31 @@
-﻿
-
-using ClinicManagementSystem.api.Models;
-using Microsoft.AspNetCore.Http.HttpResults;
+﻿using ClinicManagementSystem.api.Persistence;
+using System.Threading.Tasks;
 
 namespace ClinicManagementSystem.api.Services
 {
-    public class ClinicService : IClinicService
+    public class ClinicService(ApplicationDbContext context):IClinicService
     {
-        private readonly List<Clinic> _clinics = [
-            new Clinic { Id = 1,Name_En = "Clinic A", Name_Ar = "عياده أ", Address_En = "123 Main St",Address_Ar = "طنطا محله مرحوم", Phone = "01159728917", OpenTime = DateTime.Parse("08:00"), CloseTime = DateTime.Parse("17:00"), CreatedAt = DateTime.Now, UpdatedAt = DateTime.Now },
-        ];
+        private readonly ApplicationDbContext _context= context;
+        public async Task<IEnumerable<Clinic>> GetAllAsync(CancellationToken cancellationToken) => 
+            await _context.Clinics.AsNoTracking().ToListAsync(cancellationToken);
 
-        public IEnumerable<Clinic> GetAll() => _clinics;
+        public async Task<Clinic?> GetAsync(int id, CancellationToken cancellationToken)=> 
+            await _context.Clinics.FindAsync(id,cancellationToken);
 
-        public Clinic? Get(int id)=> _clinics.SingleOrDefault(c => c.Id == id);
-
-        public Clinic Add(Clinic clinic)
+        public async Task<Clinic> AddAsync(Clinic clinic, CancellationToken cancellationToken)
         {
-            clinic.Id = _clinics.Count+1;
-            _clinics.Add(clinic);
+            
+            await _context.Clinics.AddAsync(clinic, cancellationToken);
+            await _context.SaveChangesAsync(cancellationToken);
             return clinic;
         }
 
-        public bool Update(int id, Clinic clinic)
+        public async Task<bool> UpdateAsync(int id, Clinic clinic,CancellationToken cancellationToken)
         {
-            var curruntClinic = Get(id);
+            var curruntClinic = await GetAsync(id,cancellationToken);
 
             if (curruntClinic is null)
-                return false;   
+                return false;
             curruntClinic.Name_En = clinic.Name_En;
             curruntClinic.Name_Ar = clinic.Name_Ar;
             curruntClinic.Address_En = clinic.Address_En;
@@ -36,18 +34,20 @@ namespace ClinicManagementSystem.api.Services
             curruntClinic.OpenTime = clinic.OpenTime;
             curruntClinic.CloseTime = clinic.CloseTime;
             curruntClinic.UpdatedAt = DateTime.Now;
+            await _context.SaveChangesAsync(cancellationToken);
 
             return true;
         }
 
-        public bool Delete(int id)
+        public async Task<bool> DeleteAsync(int id,CancellationToken cancellationToken)
         {
-            var Clinic = Get(id);
+            var Clinic =await GetAsync(id,cancellationToken);
 
             if (Clinic is null)
                 return false;
 
-            _clinics.Remove(Clinic);
+            _context.Remove(Clinic);
+            await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
     }

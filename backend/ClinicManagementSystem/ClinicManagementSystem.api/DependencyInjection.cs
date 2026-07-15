@@ -1,16 +1,32 @@
-﻿namespace ClinicManagementSystem.api
+﻿using ClinicManagementSystem.api.Persistence;
+using Microsoft.Extensions.Configuration;
+
+namespace ClinicManagementSystem.api
 {
     public static class DependencyInjection
     {
-        public static IServiceCollection AddDependencies(this IServiceCollection services)
+        public static IServiceCollection AddDependencies(this IServiceCollection services,IConfiguration configuration)
         {
+
             services.AddControllers();
+
 
             services
                 .AddSwaggerConfig()
                 .AddMapsterConfig()
                 .AddFluentValidationConfig()
-                .AddDIsConfig();
+                .AddDIsConfig()
+                .AddDbConfig(configuration);
+
+            return services;
+        }
+        public static IServiceCollection AddDbConfig(this IServiceCollection services, IConfiguration configuration)
+        {
+            var connectionString = configuration.GetConnectionString("DefaultConnection") ??
+                throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
+            services.AddDbContext<ApplicationDbContext>(options =>
+                options.UseSqlServer(connectionString));
 
             return services;
         }

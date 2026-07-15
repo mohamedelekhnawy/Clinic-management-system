@@ -2,10 +2,10 @@
 {
     public interface IClinicService
     {
-        IEnumerable<Clinic> GetAll();
-        Clinic? Get(int id);
-        Clinic Add(Clinic clinic);
-        bool Update(int id, Clinic clinic);
-        bool Delete(int id);
+        Task<IEnumerable<Clinic>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task<Clinic?> GetAsync(int id, CancellationToken cancellationToken = default);
+        Task<Clinic> AddAsync(Clinic clinic, CancellationToken cancellationToken = default);
+        Task<bool> UpdateAsync(int id, Clinic clinic,CancellationToken cancellationToken = default);
+        Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
     }
 }
