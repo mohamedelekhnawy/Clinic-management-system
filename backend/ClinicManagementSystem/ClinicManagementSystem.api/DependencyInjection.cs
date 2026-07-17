@@ -56,6 +56,7 @@ namespace ClinicManagementSystem.api
         public static IServiceCollection AddDIsConfig(this IServiceCollection services)
         {
             services.AddScoped<IClinicService, ClinicService>();
+            services.AddScoped<IDoctorService, DoctorService>();
 
             return services;
         }

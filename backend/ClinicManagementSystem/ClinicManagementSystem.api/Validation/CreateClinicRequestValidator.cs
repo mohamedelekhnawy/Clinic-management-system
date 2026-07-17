@@ -2,7 +2,7 @@
 
 namespace ClinicManagementSystem.api.Validation
 {
-    public class CreateClinicRequestValidator :AbstractValidator<CreateClinicRequest>
+    public class CreateClinicRequestValidator :AbstractValidator<ClinicRequest>
     {
         public CreateClinicRequestValidator() {
             RuleFor(x => x.Name_En)

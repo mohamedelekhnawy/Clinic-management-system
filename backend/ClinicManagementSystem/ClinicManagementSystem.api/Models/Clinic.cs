@@ -12,5 +12,6 @@
         public DateTime CloseTime { get; set; }
         public DateTime CreatedAt { get; set; }
         public DateTime UpdatedAt { get; set; }
+        public ICollection<Doctor> Doctors { get; set; } = new List<Doctor>();
     }
 }

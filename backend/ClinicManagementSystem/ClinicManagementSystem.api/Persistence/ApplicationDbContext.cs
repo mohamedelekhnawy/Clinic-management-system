@@ -1,8 +1,11 @@
-﻿namespace ClinicManagementSystem.api.Persistence
+﻿using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+
+namespace ClinicManagementSystem.api.Persistence
 {
-    public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options):DbContext(options)
+    public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options):IdentityDbContext(options)
     {
         public DbSet<Clinic> Clinics { get; set; }
+        public DbSet<Doctor> Doctor { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

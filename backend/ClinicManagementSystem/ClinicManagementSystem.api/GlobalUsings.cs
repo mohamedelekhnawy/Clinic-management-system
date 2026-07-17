@@ -2,6 +2,7 @@
 global using Microsoft.AspNetCore.Mvc;
 global using Microsoft.EntityFrameworkCore.Metadata.Builders;
 global using ClinicManagementSystem.api.Services;
+global using ClinicManagementSystem.api.Contracts.Response;
 global using ClinicManagementSystem.api.Contracts.Request;
 global using FluentValidation;
 global using FluentValidation.AspNetCore;

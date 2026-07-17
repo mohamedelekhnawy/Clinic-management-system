@@ -3,14 +3,9 @@ namespace ClinicManagementSystem.api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class ClinicsController : ControllerBase
+    public class ClinicsController(IClinicService clinicService) : ControllerBase
     {
-        private readonly IClinicService _clinicService;
-
-        public ClinicsController(IClinicService clinicService)
-        {
-            _clinicService = clinicService;
-        }
+        private readonly IClinicService _clinicService=clinicService;
 
         [HttpGet("")]
         public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
@@ -32,14 +27,14 @@ namespace ClinicManagementSystem.api.Controllers
         }
 
         [HttpPost("")]
-        public async Task<IActionResult> Add(CreateClinicRequest request, CancellationToken cancellationToken)
+        public async Task<IActionResult> Add(ClinicRequest request, CancellationToken cancellationToken)
         {
             var newClinic = await _clinicService.AddAsync(request.Adapt<Clinic>(),cancellationToken);
             return CreatedAtAction(nameof(Get), new { id = newClinic.Id }, newClinic);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, CreateClinicRequest request,CancellationToken cancellationToken)
+        public async Task<IActionResult> Update(int id,ClinicRequest request,CancellationToken cancellationToken)
         {
             var isUpdated =await _clinicService.UpdateAsync(id, request.Adapt<Clinic>(),cancellationToken);
             return isUpdated ? NoContent() : NotFound();

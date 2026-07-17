@@ -1,6 +1,6 @@
 ﻿namespace ClinicManagementSystem.api.Contracts.Request
 {
-    public record CreateClinicRequest(
+    public record ClinicRequest(
         string Name_En,
         string Name_Ar,
         string Address_En,
