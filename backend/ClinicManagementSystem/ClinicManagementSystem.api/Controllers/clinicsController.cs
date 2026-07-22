@@ -1,8 +1,9 @@
-﻿using ClinicManagementSystem.api.Contracts.Responce;
+﻿using ClinicManagementSystem.api.Contracts.Clinic;
 namespace ClinicManagementSystem.api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class ClinicsController(IClinicService clinicService) : ControllerBase
     {
         private readonly IClinicService _clinicService=clinicService;

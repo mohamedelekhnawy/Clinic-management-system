@@ -1,4 +1,4 @@
-﻿namespace ClinicManagementSystem.api.Contracts.Response
+﻿namespace ClinicManagementSystem.api.Contracts.Doctor
 {
     public record DoctorResponse(
         int Id,

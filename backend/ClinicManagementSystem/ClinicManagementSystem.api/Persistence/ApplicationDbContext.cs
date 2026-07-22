@@ -2,7 +2,8 @@
 
 namespace ClinicManagementSystem.api.Persistence
 {
-    public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options):IdentityDbContext(options)
+    public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options):
+        IdentityDbContext<ApplicationUser>(options)
     {
         public DbSet<Clinic> Clinics { get; set; }
         public DbSet<Doctor> Doctor { get; set; }

@@ -1,4 +1,4 @@
-﻿namespace ClinicManagementSystem.api.Validation
+﻿namespace ClinicManagementSystem.api.Contracts.Doctor
 {
     public class CreateDoctorRequestValidation:AbstractValidator<DoctorRequest>
     {

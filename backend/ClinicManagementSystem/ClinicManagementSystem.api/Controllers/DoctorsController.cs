@@ -1,7 +1,10 @@
-﻿namespace ClinicManagementSystem.api.Controllers
+﻿using ClinicManagementSystem.api.Contracts.Doctor;
+
+namespace ClinicManagementSystem.api.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class DoctorsController(IDoctorService doctorService) : ControllerBase
     {
         private readonly IDoctorService _doctorService = doctorService;

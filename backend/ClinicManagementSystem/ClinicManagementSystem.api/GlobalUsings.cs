@@ -2,11 +2,12 @@
 global using Microsoft.AspNetCore.Mvc;
 global using Microsoft.EntityFrameworkCore.Metadata.Builders;
 global using ClinicManagementSystem.api.Services;
-global using ClinicManagementSystem.api.Contracts.Response;
-global using ClinicManagementSystem.api.Contracts.Request;
 global using FluentValidation;
 global using FluentValidation.AspNetCore;
 global using Mapster;
 global using MapsterMapper;
 global using System.Reflection;
 global using Microsoft.EntityFrameworkCore;
+global using Microsoft.AspNetCore.Identity;
+global using ClinicManagementSystem.api.Contracts.Authentication;
+global using Microsoft.AspNetCore.Authorization;

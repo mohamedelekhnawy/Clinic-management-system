@@ -1,7 +1,6 @@
-﻿namespace ClinicManagementSystem.api.Contracts.Responce
+﻿namespace ClinicManagementSystem.api.Contracts.Clinic
 {
-    public record ClinicResponse(
-        int Id,
+    public record ClinicRequest(
         string Name_En,
         string Name_Ar,
         string Address_En,
