@@ -14,8 +14,10 @@
         string Phone,
         string Email,
         decimal SessionPrice,
-        DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTime CreatedOn,
+        string? CreatedBy,
+        DateTime? UpdatedOn,
+        string? UpdatedBy
     );
 
 }

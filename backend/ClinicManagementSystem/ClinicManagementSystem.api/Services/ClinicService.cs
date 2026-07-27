@@ -14,7 +14,6 @@ namespace ClinicManagementSystem.api.Services
 
         public async Task<Clinic> AddAsync(Clinic clinic, CancellationToken cancellationToken)
         {
-            
             await _context.Clinics.AddAsync(clinic, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
             return clinic;
@@ -26,6 +25,7 @@ namespace ClinicManagementSystem.api.Services
 
             if (curruntClinic is null)
                 return false;
+
             curruntClinic.Name_En = clinic.Name_En;
             curruntClinic.Name_Ar = clinic.Name_Ar;
             curruntClinic.Address_En = clinic.Address_En;
@@ -33,7 +33,7 @@ namespace ClinicManagementSystem.api.Services
             curruntClinic.Phone = clinic.Phone;
             curruntClinic.OpenTime = clinic.OpenTime;
             curruntClinic.CloseTime = clinic.CloseTime;
-            curruntClinic.UpdatedAt = DateTime.Now;
+            
             await _context.SaveChangesAsync(cancellationToken);
 
             return true;

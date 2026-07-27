@@ -9,7 +9,9 @@
         string Phone,
         DateTime OpenTime,
         DateTime CloseTime,
-        DateTime CreatedAt,
-        DateTime UpdatedAt
+        DateTime CreatedOn,
+        string? CreatedBy,
+        DateTime? UpdatedOn,
+        string? UpdatedBy
     );
 }

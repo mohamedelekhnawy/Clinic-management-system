@@ -35,7 +35,8 @@ namespace ClinicManagementSystem.api.Services
             currentDoctor.Phone = doctor.Phone;
             currentDoctor.Email = doctor.Email;
             currentDoctor.SessionPrice = doctor.SessionPrice;
-            currentDoctor.UpdatedAt = DateTime.UtcNow;
+            
+            await _context.SaveChangesAsync(cancellationToken);
             return true;
         }
         public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)

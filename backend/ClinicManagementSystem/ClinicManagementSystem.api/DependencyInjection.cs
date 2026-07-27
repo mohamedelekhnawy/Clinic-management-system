@@ -104,6 +104,8 @@ namespace ClinicManagementSystem.api
         }
         public static IServiceCollection AddDIsConfig(this IServiceCollection services)
         {
+            services.AddHttpContextAccessor();
+            services.AddScoped<ICurrentUserService, CurrentUserService>();
             services.AddScoped<IClinicService, ClinicService>();
             services.AddScoped<IDoctorService, DoctorService>();
             services.AddScoped<IAuthService, AuthService>();
