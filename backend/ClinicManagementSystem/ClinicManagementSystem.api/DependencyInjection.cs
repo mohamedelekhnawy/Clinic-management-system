@@ -15,6 +15,7 @@ namespace ClinicManagementSystem.api
 
             services.AddControllers();
             services.AddAuthConfig(configuration);
+            services.AddCorsConfig(configuration);
 
             services
                 .AddSwaggerConfig()
@@ -22,6 +23,32 @@ namespace ClinicManagementSystem.api
                 .AddFluentValidationConfig()
                 .AddDIsConfig()
                 .AddDbConfig(configuration);
+
+            return services;
+        }
+
+        public static IServiceCollection AddCorsConfig(this IServiceCollection services, IConfiguration configuration)
+        {
+            var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+            
+            services.AddCors(options =>
+            {
+                options.AddPolicy("AllowSpecificOrigins", policy =>
+                {
+                    if (allowedOrigins.Length > 0)
+                    {
+                        policy.WithOrigins(allowedOrigins)
+                              .AllowAnyHeader()
+                              .AllowAnyMethod();
+                    }
+                    else
+                    {
+                        policy.AllowAnyOrigin()
+                              .AllowAnyHeader()
+                              .AllowAnyMethod();
+                    }
+                });
+            });
 
             return services;
         }
