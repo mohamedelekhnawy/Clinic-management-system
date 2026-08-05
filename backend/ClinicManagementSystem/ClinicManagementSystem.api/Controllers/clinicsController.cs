@@ -6,46 +6,61 @@ namespace ClinicManagementSystem.api.Controllers
     [Authorize]
     public class ClinicsController(IClinicService clinicService) : ControllerBase
     {
-        private readonly IClinicService _clinicService=clinicService;
+        private readonly IClinicService _clinicService = clinicService;
 
         [HttpGet("")]
         public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
-            var clinics = await _clinicService.GetAllAsync(cancellationToken);
-            var response = clinics.Adapt<List<ClinicResponse>>();
+            var result = await _clinicService.GetAllAsync(cancellationToken);
+            
+            if (!result.IsSuccess)
+                return BadRequest(new { error = result.Error.Message });
+            
+            var response = result.Value.Adapt<List<ClinicResponse>>();
             return Ok(response);
         }
 
         [HttpGet("{id}")]
         public async Task<IActionResult> Get(int id, CancellationToken cancellationToken)
         {
-            var clinic =await _clinicService.GetAsync(id, cancellationToken);
-            if (clinic == null)
-                return NotFound();
+            var result = await _clinicService.GetAsync(id, cancellationToken);
+            
+            if (!result.IsSuccess)
+                return NotFound(new { error = result.Error.Message });
 
-            var response = clinic.Adapt<ClinicResponse>();
+            var response = result.Value.Adapt<ClinicResponse>();
             return Ok(response);
         }
 
         [HttpPost("")]
         public async Task<IActionResult> Add(ClinicRequest request, CancellationToken cancellationToken)
         {
-            var newClinic = await _clinicService.AddAsync(request.Adapt<Clinic>(),cancellationToken);
-            return CreatedAtAction(nameof(Get), new { id = newClinic.Id }, newClinic);
+            var result = await _clinicService.AddAsync(request.Adapt<Clinic>(), cancellationToken);
+            
+            if (!result.IsSuccess)
+                return BadRequest(new { error = result.Error.Message });
+            
+            return CreatedAtAction(nameof(Get), new { id = result.Value.Id }, result.Value);
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id,ClinicRequest request,CancellationToken cancellationToken)
+        public async Task<IActionResult> Update(int id, ClinicRequest request, CancellationToken cancellationToken)
         {
-            var isUpdated =await _clinicService.UpdateAsync(id, request.Adapt<Clinic>(),cancellationToken);
-            return isUpdated ? NoContent() : NotFound();
+            var result = await _clinicService.UpdateAsync(id, request.Adapt<Clinic>(), cancellationToken);
+            
+            return result.IsSuccess 
+                ? NoContent() 
+                : NotFound(new { error = result.Error.Message });
         }
 
         [HttpDelete("{id}")]
-        public async Task<IActionResult> Delete(int id)
+        public async Task<IActionResult> Delete(int id, CancellationToken cancellationToken)
         {
-            var isDeleted =await _clinicService.DeleteAsync(id);
-            return isDeleted ? NoContent() : NotFound();
+            var result = await _clinicService.DeleteAsync(id, cancellationToken);
+            
+            return result.IsSuccess 
+                ? NoContent() 
+                : NotFound(new { error = result.Error.Message });
         }
 
     }

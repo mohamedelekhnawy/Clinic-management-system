@@ -1,11 +1,13 @@
-﻿namespace ClinicManagementSystem.api.Services
+﻿using ClinicManagementSystem.api.Abstractions;
+
+namespace ClinicManagementSystem.api.Services
 {
     public interface IClinicService
     {
-        Task<IEnumerable<Clinic>> GetAllAsync(CancellationToken cancellationToken = default);
-        Task<Clinic?> GetAsync(int id, CancellationToken cancellationToken = default);
-        Task<Clinic> AddAsync(Clinic clinic, CancellationToken cancellationToken = default);
-        Task<bool> UpdateAsync(int id, Clinic clinic,CancellationToken cancellationToken = default);
-        Task<bool> DeleteAsync(int id, CancellationToken cancellationToken = default);
+        Task<Result<IEnumerable<Clinic>>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task<Result<Clinic>> GetAsync(int id, CancellationToken cancellationToken = default);
+        Task<Result<Clinic>> AddAsync(Clinic clinic, CancellationToken cancellationToken = default);
+        Task<Result> UpdateAsync(int id, Clinic clinic, CancellationToken cancellationToken = default);
+        Task<Result> DeleteAsync(int id, CancellationToken cancellationToken = default);
     }
 }

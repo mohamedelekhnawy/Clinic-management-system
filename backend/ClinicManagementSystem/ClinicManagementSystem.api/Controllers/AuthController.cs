@@ -10,28 +10,40 @@
         public async Task<IActionResult> LoginAsync(LoginRequest request, CancellationToken cancellationToken)
         {
             var authResult = await authService.GetTokenAsync(request.Email, request.Password, cancellationToken);
-            return authResult is null ? BadRequest("Invalid email or password") : Ok(authResult);
+            
+            return authResult.IsSuccess 
+                ? Ok(authResult.Value) 
+                : BadRequest(new { error = authResult.Error.Message });
         }
 
         [HttpPost("register")]
         public async Task<IActionResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken)
         {
             var authResult = await authService.RegisterAsync(request.FirstName, request.LastName, request.Email, request.Password, cancellationToken);
-            return authResult is null ? BadRequest("User already exists or registration failed") : Ok(authResult);
+            
+            return authResult.IsSuccess 
+                ? Ok(authResult.Value) 
+                : BadRequest(new { error = authResult.Error.Message });
         }
 
         [HttpPost("refresh")]
         public async Task<IActionResult> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken)
         {
             var authResult = await authService.RefreshTokenAsync(request.Token, request.RefreshToken, cancellationToken);
-            return authResult is null ? BadRequest("Invalid token or refresh token") : Ok(authResult);
+            
+            return authResult.IsSuccess 
+                ? Ok(authResult.Value) 
+                : BadRequest(new { error = authResult.Error.Message });
         }
 
         [HttpPost("revoke")]
         public async Task<IActionResult> RevokeTokenAsync(RevokeTokenRequest request, CancellationToken cancellationToken)
         {
             var result = await authService.RevokeRefreshTokenAsync(request.RefreshToken, cancellationToken);
-            return result ? Ok(new { message = "Token revoked successfully" }) : BadRequest("Invalid or inactive refresh token");
+            
+            return result.IsSuccess 
+                ? Ok(new { message = "Token revoked successfully" }) 
+                : BadRequest(new { error = result.Error.Message });
         }
     }
 }

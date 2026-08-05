@@ -1,54 +1,61 @@
-﻿using ClinicManagementSystem.api.Persistence;
-using System.Threading.Tasks;
-
+﻿
 namespace ClinicManagementSystem.api.Services
 {
-    public class ClinicService(ApplicationDbContext context):IClinicService
+    public class ClinicService(ApplicationDbContext context) : IClinicService
     {
-        private readonly ApplicationDbContext _context= context;
-        public async Task<IEnumerable<Clinic>> GetAllAsync(CancellationToken cancellationToken) => 
-            await _context.Clinics.AsNoTracking().ToListAsync(cancellationToken);
+        private readonly ApplicationDbContext _context = context;
+        
+        public async Task<Result<IEnumerable<Clinic>>> GetAllAsync(CancellationToken cancellationToken)
+        {
+            var clinics = await _context.Clinics.AsNoTracking().ToListAsync(cancellationToken);
+            return Result.Success<IEnumerable<Clinic>>(clinics);
+        }
 
-        public async Task<Clinic?> GetAsync(int id, CancellationToken cancellationToken)=> 
-            await _context.Clinics.FindAsync(id,cancellationToken);
+        public async Task<Result<Clinic>> GetAsync(int id, CancellationToken cancellationToken)
+        {
+            var clinic = await _context.Clinics.FindAsync([id], cancellationToken);
+            
+            return clinic is null
+                ? Result.Failure<Clinic>(ClinicErrors.NotFound)
+                : Result.Success(clinic);
+        }
 
-        public async Task<Clinic> AddAsync(Clinic clinic, CancellationToken cancellationToken)
+        public async Task<Result<Clinic>> AddAsync(Clinic clinic, CancellationToken cancellationToken)
         {
             await _context.Clinics.AddAsync(clinic, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
-            return clinic;
+            return Result.Success(clinic);
         }
 
-        public async Task<bool> UpdateAsync(int id, Clinic clinic,CancellationToken cancellationToken)
+        public async Task<Result> UpdateAsync(int id, Clinic clinic, CancellationToken cancellationToken)
         {
-            var curruntClinic = await GetAsync(id,cancellationToken);
+            var currentClinic = await _context.Clinics.FindAsync([id], cancellationToken);
 
-            if (curruntClinic is null)
-                return false;
+            if (currentClinic is null)
+                return Result.Failure(ClinicErrors.NotFound);
 
-            curruntClinic.Name_En = clinic.Name_En;
-            curruntClinic.Name_Ar = clinic.Name_Ar;
-            curruntClinic.Address_En = clinic.Address_En;
-            curruntClinic.Address_Ar = clinic.Address_Ar;
-            curruntClinic.Phone = clinic.Phone;
-            curruntClinic.OpenTime = clinic.OpenTime;
-            curruntClinic.CloseTime = clinic.CloseTime;
+            currentClinic.Name_En = clinic.Name_En;
+            currentClinic.Name_Ar = clinic.Name_Ar;
+            currentClinic.Address_En = clinic.Address_En;
+            currentClinic.Address_Ar = clinic.Address_Ar;
+            currentClinic.Phone = clinic.Phone;
+            currentClinic.OpenTime = clinic.OpenTime;
+            currentClinic.CloseTime = clinic.CloseTime;
             
             await _context.SaveChangesAsync(cancellationToken);
-
-            return true;
+            return Result.Success();
         }
 
-        public async Task<bool> DeleteAsync(int id,CancellationToken cancellationToken)
+        public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
         {
-            var Clinic =await GetAsync(id,cancellationToken);
+            var clinic = await _context.Clinics.FindAsync([id], cancellationToken);
 
-            if (Clinic is null)
-                return false;
+            if (clinic is null)
+                return Result.Failure(ClinicErrors.NotFound);
 
-            _context.Remove(Clinic);
+            _context.Remove(clinic);
             await _context.SaveChangesAsync(cancellationToken);
-            return true;
+            return Result.Success();
         }
     }
 }

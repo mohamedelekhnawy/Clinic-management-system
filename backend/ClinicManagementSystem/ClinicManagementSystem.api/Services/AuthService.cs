@@ -1,4 +1,4 @@
-﻿using ClinicManagementSystem.api.Authentication;
+﻿
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 
@@ -9,18 +9,18 @@ namespace ClinicManagementSystem.api.Services
         private readonly UserManager<ApplicationUser> _userManager = userManager;
         private readonly IJwtProvider _jwtProvider = jwtProvider;
 
-        public async Task<AuthResponse?> GetTokenAsync(string email, string password, CancellationToken cancellationToken = default)
+        public async Task<Result<AuthResponse>> GetTokenAsync(string email, string password, CancellationToken cancellationToken = default)
         {
             var user = await _userManager.Users
                 .Include(u => u.RefreshTokens)
                 .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
 
             if (user is null)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
 
             var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
             if (!isPasswordValid)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
 
             var (token, expiresIn) = _jwtProvider.GenerateToken(user);
             var refreshToken = _jwtProvider.GenerateRefreshToken();
@@ -35,14 +35,15 @@ namespace ClinicManagementSystem.api.Services
 
             await _userManager.UpdateAsync(user);
 
-            return new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+            var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+            return Result.Success(response);
         }
 
-        public async Task<AuthResponse?> RegisterAsync(string firstName, string lastName, string email, string password, CancellationToken cancellationToken = default)
+        public async Task<Result<AuthResponse>> RegisterAsync(string firstName, string lastName, string email, string password, CancellationToken cancellationToken = default)
         {
             var existingUser = await _userManager.FindByEmailAsync(email);
             if (existingUser is not null)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.EmailAlreadyExists);
 
             var user = new ApplicationUser
             {
@@ -54,7 +55,7 @@ namespace ClinicManagementSystem.api.Services
 
             var result = await _userManager.CreateAsync(user, password);
             if (!result.Succeeded)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.RegistrationFailed);
 
             var (token, expiresIn) = _jwtProvider.GenerateToken(user);
             var refreshToken = _jwtProvider.GenerateRefreshToken();
@@ -69,31 +70,32 @@ namespace ClinicManagementSystem.api.Services
 
             await _userManager.UpdateAsync(user);
 
-            return new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+            var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+            return Result.Success(response);
         }
 
-        public async Task<AuthResponse?> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
+        public async Task<Result<AuthResponse>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
         {
             var principal = _jwtProvider.ValidateToken(token);
             if (principal is null)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.InvalidToken);
 
             var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) 
                 ?? principal.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
             
             if (string.IsNullOrEmpty(userId))
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.InvalidToken);
 
             var user = await _userManager.Users
                 .Include(u => u.RefreshTokens)
                 .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
             if (user is null)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.UserNotFound);
 
             var userRefreshToken = user.RefreshTokens.FirstOrDefault(rt => rt.Token == refreshToken);
             if (userRefreshToken is null || !userRefreshToken.IsActive)
-                return null;
+                return Result.Failure<AuthResponse>(AuthErrors.InvalidRefreshToken);
 
             userRefreshToken.RevokedOn = DateTime.UtcNow;
 
@@ -110,26 +112,27 @@ namespace ClinicManagementSystem.api.Services
 
             await _userManager.UpdateAsync(user);
 
-            return new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
+            var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
+            return Result.Success(response);
         }
 
-        public async Task<bool> RevokeRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
+        public async Task<Result> RevokeRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
         {
             var user = await _userManager.Users
                 .Include(u => u.RefreshTokens)
                 .FirstOrDefaultAsync(u => u.RefreshTokens.Any(rt => rt.Token == refreshToken), cancellationToken);
 
             if (user is null)
-                return false;
+                return Result.Failure(AuthErrors.InvalidRefreshToken);
 
             var userRefreshToken = user.RefreshTokens.FirstOrDefault(rt => rt.Token == refreshToken);
             if (userRefreshToken is null || !userRefreshToken.IsActive)
-                return false;
+                return Result.Failure(AuthErrors.InvalidRefreshToken);
 
             userRefreshToken.RevokedOn = DateTime.UtcNow;
             await _userManager.UpdateAsync(user);
 
-            return true;
+            return Result.Success();
         }
     }
 }

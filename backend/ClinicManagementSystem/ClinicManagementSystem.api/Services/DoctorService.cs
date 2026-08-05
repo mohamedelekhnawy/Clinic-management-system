@@ -1,4 +1,4 @@
-﻿
+﻿using ClinicManagementSystem.api.Abstractions;
 using ClinicManagementSystem.api.Persistence;
 
 namespace ClinicManagementSystem.api.Services
@@ -6,23 +6,34 @@ namespace ClinicManagementSystem.api.Services
     public class DoctorService(ApplicationDbContext context) : IDoctorService
     {
         private readonly ApplicationDbContext _context = context;
-        public async Task<IEnumerable<Doctor>> GetAllAsync(CancellationToken cancellationToken)=>
-            await _context.Doctor.AsNoTracking().ToListAsync(cancellationToken);
+        
+        public async Task<Result<IEnumerable<Doctor>>> GetAllAsync(CancellationToken cancellationToken)
+        {
+            var doctors = await _context.Doctor.AsNoTracking().ToListAsync(cancellationToken);
+            return Result.Success<IEnumerable<Doctor>>(doctors);
+        }
 
-        public async Task<Doctor?> GetAsync(int id, CancellationToken cancellationToken)=>
-            await _context.Doctor.FindAsync(id,cancellationToken);
+        public async Task<Result<Doctor>> GetAsync(int id, CancellationToken cancellationToken)
+        {
+            var doctor = await _context.Doctor.FindAsync([id], cancellationToken);
+            
+            return doctor is null 
+                ? Result.Failure<Doctor>(DoctorErrors.NotFound)
+                : Result.Success(doctor);
+        }
 
-        public async Task<Doctor> AddAsync(Doctor doctor, CancellationToken cancellationToken)
+        public async Task<Result<Doctor>> AddAsync(Doctor doctor, CancellationToken cancellationToken)
         {
             await _context.Doctor.AddAsync(doctor, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
-            return doctor;
+            return Result.Success(doctor);
         }
-        public async Task<bool> UpdateAsync(int id, Doctor doctor, CancellationToken cancellationToken)
+
+        public async Task<Result> UpdateAsync(int id, Doctor doctor, CancellationToken cancellationToken)
         {
-            var currentDoctor = await GetAsync(id, cancellationToken);
+            var currentDoctor = await _context.Doctor.FindAsync([id], cancellationToken);
             if (currentDoctor is null)
-                return false;
+                return Result.Failure(DoctorErrors.NotFound);
 
             currentDoctor.FirstName_En = doctor.FirstName_En;
             currentDoctor.FirstName_Ar = doctor.FirstName_Ar;
@@ -37,17 +48,18 @@ namespace ClinicManagementSystem.api.Services
             currentDoctor.SessionPrice = doctor.SessionPrice;
             
             await _context.SaveChangesAsync(cancellationToken);
-            return true;
+            return Result.Success();
         }
-        public async Task<bool> DeleteAsync(int id, CancellationToken cancellationToken)
+
+        public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
         {
-            var doctor = await GetAsync(id, cancellationToken);
+            var doctor = await _context.Doctor.FindAsync([id], cancellationToken);
             if (doctor is null) 
-                return false;
+                return Result.Failure(DoctorErrors.NotFound);
 
             _context.Remove(doctor);
             await _context.SaveChangesAsync(cancellationToken);
-            return true;
+            return Result.Success();
         }
     }
 }

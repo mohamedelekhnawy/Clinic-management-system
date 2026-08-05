@@ -11,3 +11,6 @@ global using Microsoft.EntityFrameworkCore;
 global using Microsoft.AspNetCore.Identity;
 global using ClinicManagementSystem.api.Contracts.Authentication;
 global using Microsoft.AspNetCore.Authorization;
+global using ClinicManagementSystem.api.Abstractions;
+global using ClinicManagementSystem.api.Authentication;
+global using ClinicManagementSystem.api.Persistence;
