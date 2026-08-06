@@ -1,5 +1,6 @@
 ﻿using ClinicManagementSystem.api.Authentication;
 using ClinicManagementSystem.api.Persistence;
+using ClinicManagementSystem.api.Middleware;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -25,6 +26,12 @@ namespace ClinicManagementSystem.api
                 .AddDbConfig(configuration);
 
             return services;
+        }
+
+        public static IApplicationBuilder UseGlobalExceptionHandler(this IApplicationBuilder app)
+        {
+            app.UseMiddleware<GlobalExceptionHandlerMiddleware>();
+            return app;
         }
 
         public static IServiceCollection AddCorsConfig(this IServiceCollection services, IConfiguration configuration)

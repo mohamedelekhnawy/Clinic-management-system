@@ -24,9 +24,33 @@ namespace ClinicManagementSystem.api.Services
 
         public async Task<Result<Doctor>> AddAsync(Doctor doctor, CancellationToken cancellationToken)
         {
-            await _context.Doctor.AddAsync(doctor, cancellationToken);
-            await _context.SaveChangesAsync(cancellationToken);
-            return Result.Success(doctor);
+            // Validate that clinic exists before adding doctor
+            var clinicExists = await _context.Clinics.AnyAsync(c => c.Id == doctor.ClinicId, cancellationToken);
+            if (!clinicExists)
+                return Result.Failure<Doctor>(DoctorErrors.ClinicNotFound);
+
+            try
+            {
+                await _context.Doctor.AddAsync(doctor, cancellationToken);
+                await _context.SaveChangesAsync(cancellationToken);
+                return Result.Success(doctor);
+            }
+            catch (DbUpdateException ex)
+            {
+                // Check for duplicate email/phone constraint violations
+                if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
+                    ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
+                        return Result.Failure<Doctor>(DoctorErrors.DuplicateEmail);
+                    
+                    if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
+                        return Result.Failure<Doctor>(DoctorErrors.DuplicatePhone);
+                }
+                
+                // Let other database errors bubble up to global handler
+                throw;
+            }
         }
 
         public async Task<Result> UpdateAsync(int id, Doctor doctor, CancellationToken cancellationToken)
@@ -34,6 +58,14 @@ namespace ClinicManagementSystem.api.Services
             var currentDoctor = await _context.Doctor.FindAsync([id], cancellationToken);
             if (currentDoctor is null)
                 return Result.Failure(DoctorErrors.NotFound);
+
+            // Validate that clinic exists if changing clinic
+            if (currentDoctor.ClinicId != doctor.ClinicId)
+            {
+                var clinicExists = await _context.Clinics.AnyAsync(c => c.Id == doctor.ClinicId, cancellationToken);
+                if (!clinicExists)
+                    return Result.Failure(DoctorErrors.ClinicNotFound);
+            }
 
             currentDoctor.FirstName_En = doctor.FirstName_En;
             currentDoctor.FirstName_Ar = doctor.FirstName_Ar;
@@ -46,9 +78,38 @@ namespace ClinicManagementSystem.api.Services
             currentDoctor.Phone = doctor.Phone;
             currentDoctor.Email = doctor.Email;
             currentDoctor.SessionPrice = doctor.SessionPrice;
+            currentDoctor.ClinicId = doctor.ClinicId;
             
-            await _context.SaveChangesAsync(cancellationToken);
-            return Result.Success();
+            try
+            {
+                await _context.SaveChangesAsync(cancellationToken);
+                return Result.Success();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                // Check if record still exists
+                var exists = await _context.Doctor.AnyAsync(d => d.Id == id, cancellationToken);
+                if (!exists)
+                    return Result.Failure(DoctorErrors.NotFound);
+                
+                // Let concurrency exception bubble up to global handler
+                throw;
+            }
+            catch (DbUpdateException ex)
+            {
+                // Check for duplicate constraint violations
+                if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
+                    ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
+                        return Result.Failure(DoctorErrors.DuplicateEmail);
+                    
+                    if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
+                        return Result.Failure(DoctorErrors.DuplicatePhone);
+                }
+                
+                throw;
+            }
         }
 
         public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
@@ -57,9 +118,23 @@ namespace ClinicManagementSystem.api.Services
             if (doctor is null) 
                 return Result.Failure(DoctorErrors.NotFound);
 
-            _context.Remove(doctor);
-            await _context.SaveChangesAsync(cancellationToken);
-            return Result.Success();
+            try
+            {
+                _context.Remove(doctor);
+                await _context.SaveChangesAsync(cancellationToken);
+                return Result.Success();
+            }
+            catch (DbUpdateException ex)
+            {
+                // Check for foreign key constraint violations (e.g., doctor has appointments)
+                if (ex.InnerException?.Message.Contains("REFERENCE", StringComparison.OrdinalIgnoreCase) == true ||
+                    ex.InnerException?.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    return Result.Failure(DoctorErrors.HasDependentRecords);
+                }
+                
+                throw;
+            }
         }
     }
 }

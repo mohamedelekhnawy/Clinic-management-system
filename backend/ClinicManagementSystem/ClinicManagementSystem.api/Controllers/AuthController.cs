@@ -1,4 +1,6 @@
-﻿namespace ClinicManagementSystem.api.Controllers
+﻿using ClinicManagementSystem.api.Extensions;
+
+namespace ClinicManagementSystem.api.Controllers
 {
     [Route("/[controller]")]
     [ApiController]
@@ -13,7 +15,7 @@
             
             return authResult.IsSuccess 
                 ? Ok(authResult.Value) 
-                : BadRequest(new { error = authResult.Error.Message });
+                : this.Problem(authResult.Error, StatusCodes.Status400BadRequest);
         }
 
         [HttpPost("register")]
@@ -23,7 +25,7 @@
             
             return authResult.IsSuccess 
                 ? Ok(authResult.Value) 
-                : BadRequest(new { error = authResult.Error.Message });
+                : this.Problem(authResult.Error, StatusCodes.Status400BadRequest);
         }
 
         [HttpPost("refresh")]
@@ -33,7 +35,7 @@
             
             return authResult.IsSuccess 
                 ? Ok(authResult.Value) 
-                : BadRequest(new { error = authResult.Error.Message });
+                : this.Problem(authResult.Error, StatusCodes.Status400BadRequest);
         }
 
         [HttpPost("revoke")]
@@ -43,7 +45,7 @@
             
             return result.IsSuccess 
                 ? Ok(new { message = "Token revoked successfully" }) 
-                : BadRequest(new { error = result.Error.Message });
+                : this.Problem(result.Error, StatusCodes.Status400BadRequest);
         }
     }
 }

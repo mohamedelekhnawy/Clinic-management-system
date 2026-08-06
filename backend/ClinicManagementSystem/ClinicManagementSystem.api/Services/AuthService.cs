@@ -22,21 +22,29 @@ namespace ClinicManagementSystem.api.Services
             if (!isPasswordValid)
                 return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
 
-            var (token, expiresIn) = _jwtProvider.GenerateToken(user);
-            var refreshToken = _jwtProvider.GenerateRefreshToken();
-            var refreshTokenExpiration = DateTime.UtcNow.AddDays(7);
-
-            user.RefreshTokens.Add(new RefreshToken
+            try
             {
-                Token = refreshToken,
-                ExpiresOn = refreshTokenExpiration,
-                CreatedOn = DateTime.UtcNow
-            });
+                var (token, expiresIn) = _jwtProvider.GenerateToken(user);
+                var refreshToken = _jwtProvider.GenerateRefreshToken();
+                var refreshTokenExpiration = DateTime.UtcNow.AddDays(7);
 
-            await _userManager.UpdateAsync(user);
+                user.RefreshTokens.Add(new RefreshToken
+                {
+                    Token = refreshToken,
+                    ExpiresOn = refreshTokenExpiration,
+                    CreatedOn = DateTime.UtcNow
+                });
 
-            var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
-            return Result.Success(response);
+                await _userManager.UpdateAsync(user);
+
+                var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+                return Result.Success(response);
+            }
+            catch (DbUpdateException)
+            {
+                // Let database errors bubble up to global handler
+                throw;
+            }
         }
 
         public async Task<Result<AuthResponse>> RegisterAsync(string firstName, string lastName, string email, string password, CancellationToken cancellationToken = default)
@@ -53,25 +61,43 @@ namespace ClinicManagementSystem.api.Services
                 UserName = email
             };
 
-            var result = await _userManager.CreateAsync(user, password);
-            if (!result.Succeeded)
-                return Result.Failure<AuthResponse>(AuthErrors.RegistrationFailed);
-
-            var (token, expiresIn) = _jwtProvider.GenerateToken(user);
-            var refreshToken = _jwtProvider.GenerateRefreshToken();
-            var refreshTokenExpiration = DateTime.UtcNow.AddDays(7);
-
-            user.RefreshTokens.Add(new RefreshToken
+            try
             {
-                Token = refreshToken,
-                ExpiresOn = refreshTokenExpiration,
-                CreatedOn = DateTime.UtcNow
-            });
+                var result = await _userManager.CreateAsync(user, password);
+                if (!result.Succeeded)
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    return Result.Failure<AuthResponse>(new Error("Auth.RegistrationFailed", errors, ErrorType.Validation));
+                }
 
-            await _userManager.UpdateAsync(user);
+                var (token, expiresIn) = _jwtProvider.GenerateToken(user);
+                var refreshToken = _jwtProvider.GenerateRefreshToken();
+                var refreshTokenExpiration = DateTime.UtcNow.AddDays(7);
 
-            var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
-            return Result.Success(response);
+                user.RefreshTokens.Add(new RefreshToken
+                {
+                    Token = refreshToken,
+                    ExpiresOn = refreshTokenExpiration,
+                    CreatedOn = DateTime.UtcNow
+                });
+
+                await _userManager.UpdateAsync(user);
+
+                var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+                return Result.Success(response);
+            }
+            catch (DbUpdateException ex)
+            {
+                // Check for duplicate email constraint
+                if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
+                    ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    return Result.Failure<AuthResponse>(AuthErrors.EmailAlreadyExists);
+                }
+                
+                // Let other database errors bubble up to global handler
+                throw;
+            }
         }
 
         public async Task<Result<AuthResponse>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
@@ -97,23 +123,31 @@ namespace ClinicManagementSystem.api.Services
             if (userRefreshToken is null || !userRefreshToken.IsActive)
                 return Result.Failure<AuthResponse>(AuthErrors.InvalidRefreshToken);
 
-            userRefreshToken.RevokedOn = DateTime.UtcNow;
-
-            var (newToken, expiresIn) = _jwtProvider.GenerateToken(user);
-            var newRefreshToken = _jwtProvider.GenerateRefreshToken();
-            var newRefreshTokenExpiration = DateTime.UtcNow.AddDays(7);
-
-            user.RefreshTokens.Add(new RefreshToken
+            try
             {
-                Token = newRefreshToken,
-                ExpiresOn = newRefreshTokenExpiration,
-                CreatedOn = DateTime.UtcNow
-            });
+                userRefreshToken.RevokedOn = DateTime.UtcNow;
 
-            await _userManager.UpdateAsync(user);
+                var (newToken, expiresIn) = _jwtProvider.GenerateToken(user);
+                var newRefreshToken = _jwtProvider.GenerateRefreshToken();
+                var newRefreshTokenExpiration = DateTime.UtcNow.AddDays(7);
 
-            var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
-            return Result.Success(response);
+                user.RefreshTokens.Add(new RefreshToken
+                {
+                    Token = newRefreshToken,
+                    ExpiresOn = newRefreshTokenExpiration,
+                    CreatedOn = DateTime.UtcNow
+                });
+
+                await _userManager.UpdateAsync(user);
+
+                var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
+                return Result.Success(response);
+            }
+            catch (DbUpdateException)
+            {
+                // Let database errors bubble up to global handler
+                throw;
+            }
         }
 
         public async Task<Result> RevokeRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
@@ -129,10 +163,18 @@ namespace ClinicManagementSystem.api.Services
             if (userRefreshToken is null || !userRefreshToken.IsActive)
                 return Result.Failure(AuthErrors.InvalidRefreshToken);
 
-            userRefreshToken.RevokedOn = DateTime.UtcNow;
-            await _userManager.UpdateAsync(user);
+            try
+            {
+                userRefreshToken.RevokedOn = DateTime.UtcNow;
+                await _userManager.UpdateAsync(user);
 
-            return Result.Success();
+                return Result.Success();
+            }
+            catch (DbUpdateException)
+            {
+                // Let database errors bubble up to global handler
+                throw;
+            }
         }
     }
 }

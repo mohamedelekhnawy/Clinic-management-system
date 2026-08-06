@@ -1,4 +1,5 @@
 ﻿using ClinicManagementSystem.api.Contracts.Doctor;
+using ClinicManagementSystem.api.Extensions;
 
 namespace ClinicManagementSystem.api.Controllers
 {
@@ -15,7 +16,7 @@ namespace ClinicManagementSystem.api.Controllers
             var result = await _doctorService.GetAllAsync(cancellationToken);
             
             if (!result.IsSuccess)
-                return BadRequest(new { error = result.Error.Message });
+                return this.Problem(result.Error, StatusCodes.Status400BadRequest);
             
             var response = result.Value.Adapt<List<DoctorResponse>>();
             return Ok(response);
@@ -27,7 +28,7 @@ namespace ClinicManagementSystem.api.Controllers
             var result = await _doctorService.GetAsync(id, cancellationToken);
             
             if (!result.IsSuccess)
-                return NotFound(new { error = result.Error.Message });
+                return this.Problem(result.Error, StatusCodes.Status404NotFound);
             
             var response = result.Value.Adapt<DoctorResponse>();
             return Ok(response);
@@ -39,7 +40,15 @@ namespace ClinicManagementSystem.api.Controllers
             var result = await _doctorService.AddAsync(request.Adapt<Doctor>(), cancellationToken);
             
             if (!result.IsSuccess)
-                return BadRequest(new { error = result.Error.Message });
+            {
+                var statusCode = result.Error.Type switch
+                {
+                    ErrorType.NotFound => StatusCodes.Status404NotFound,
+                    ErrorType.Conflict => StatusCodes.Status409Conflict,
+                    _ => StatusCodes.Status400BadRequest
+                };
+                return this.Problem(result.Error, statusCode);
+            }
             
             return CreatedAtAction(nameof(Get), new { id = result.Value.Id }, result.Value);
         }
@@ -49,9 +58,18 @@ namespace ClinicManagementSystem.api.Controllers
         {
             var result = await _doctorService.UpdateAsync(id, request.Adapt<Doctor>(), cancellationToken);
             
-            return result.IsSuccess 
-                ? NoContent() 
-                : NotFound(new { error = result.Error.Message });
+            if (!result.IsSuccess)
+            {
+                var statusCode = result.Error.Type switch
+                {
+                    ErrorType.NotFound => StatusCodes.Status404NotFound,
+                    ErrorType.Conflict => StatusCodes.Status409Conflict,
+                    _ => StatusCodes.Status400BadRequest
+                };
+                return this.Problem(result.Error, statusCode);
+            }
+
+            return NoContent();
         }
 
         [HttpDelete("{id}")]
@@ -59,9 +77,18 @@ namespace ClinicManagementSystem.api.Controllers
         {
             var result = await _doctorService.DeleteAsync(id, cancellationToken);
             
-            return result.IsSuccess 
-                ? NoContent() 
-                : NotFound(new { error = result.Error.Message });
+            if (!result.IsSuccess)
+            {
+                var statusCode = result.Error.Type switch
+                {
+                    ErrorType.NotFound => StatusCodes.Status404NotFound,
+                    ErrorType.Conflict => StatusCodes.Status409Conflict,
+                    _ => StatusCodes.Status400BadRequest
+                };
+                return this.Problem(result.Error, statusCode);
+            }
+
+            return NoContent();
         }
     }
 }

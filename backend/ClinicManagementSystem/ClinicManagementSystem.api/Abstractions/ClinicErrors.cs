@@ -7,8 +7,13 @@ public static class ClinicErrors
         "Clinic not found",
         ErrorType.NotFound);
 
-    public static readonly Error AlreadyExists = new(
-        "Clinic.AlreadyExists",
-        "Clinic already exists",
+    public static readonly Error DuplicateName = new(
+        "Clinic.DuplicateName",
+        "A clinic with this name already exists",
+        ErrorType.Conflict);
+
+    public static readonly Error HasDependentDoctors = new(
+        "Clinic.HasDependentDoctors",
+        "Cannot delete clinic because it has associated doctors",
         ErrorType.Conflict);
 }
