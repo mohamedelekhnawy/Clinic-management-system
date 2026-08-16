@@ -14,3 +14,4 @@ global using Microsoft.AspNetCore.Authorization;
 global using ClinicManagementSystem.api.Abstractions;
 global using ClinicManagementSystem.api.Authentication;
 global using ClinicManagementSystem.api.Persistence;
+global using ClinicManagementSystem.api.Models.Enums.ClinicManagementSystem.api.Enums;
