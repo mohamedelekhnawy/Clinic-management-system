@@ -36,7 +36,7 @@ public class PatientRequestValidator : AbstractValidator<PatientRequest>
 
         // Gender
         RuleFor(x => x.Gender)
-            .IsInEnum().WithMessage("Invalid gender value. Must be 1 (Male) or 2 (Female)");
+            .Must(g => g == 1 || g == 2).WithMessage("Invalid gender value. Must be 1 (Male) or 2 (Female)");
 
         // Phone
         RuleFor(x => x.Phone)
