@@ -17,6 +17,7 @@ namespace ClinicManagementSystem.api.Persistence
         public DbSet<Doctor> Doctor { get; set; } = null!;
         public DbSet<Patient> Patients { get; set; } = null!;
         public DbSet<Assistant> Assistants { get; set; } = null!;
+        public DbSet<Appointment> Appointments { get; set; } = null!;
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
