@@ -23,7 +23,8 @@ namespace ClinicManagementSystem.api
                 .AddMapsterConfig()
                 .AddFluentValidationConfig()
                 .AddDIsConfig()
-                .AddDbConfig(configuration);
+                .AddDbConfig(configuration)
+                .AddHybridCacheConfig(configuration);
 
             return services;
         }
@@ -197,6 +198,22 @@ namespace ClinicManagementSystem.api
                         ClockSkew = TimeSpan.Zero
                     };
                 });
+
+            return services;
+        }
+
+        public static IServiceCollection AddHybridCacheConfig(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddHybridCache(options =>
+            {
+                options.MaximumPayloadBytes = configuration.GetValue<int?>("HybridCache:MaximumPayloadBytes") ?? 1024 * 1024; // 1 MB default
+                options.MaximumKeyLength = configuration.GetValue<int?>("HybridCache:MaximumKeyLength") ?? 1024; // 1 KB default
+                options.DefaultEntryOptions = new Microsoft.Extensions.Caching.Hybrid.HybridCacheEntryOptions
+                {
+                    Expiration = TimeSpan.FromMinutes(configuration.GetValue<int?>("HybridCache:DefaultExpirationMinutes") ?? 5),
+                    LocalCacheExpiration = TimeSpan.FromMinutes(configuration.GetValue<int?>("HybridCache:LocalCacheExpirationMinutes") ?? 5)
+                };
+            });
 
             return services;
         }

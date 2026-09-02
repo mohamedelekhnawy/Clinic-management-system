@@ -1,21 +1,44 @@
 ﻿using ClinicManagementSystem.api.Abstractions;
 using ClinicManagementSystem.api.Persistence;
+using Microsoft.Extensions.Caching.Hybrid;
 
 namespace ClinicManagementSystem.api.Services
 {
-    public class DoctorService(ApplicationDbContext context) : IDoctorService
+    public class DoctorService(ApplicationDbContext context, HybridCache cache) : IDoctorService
     {
         private readonly ApplicationDbContext _context = context;
+        private readonly HybridCache _cache = cache;
+        private const string DoctorsAllCacheKey = "doctors:all";
+        private static string GetDoctorCacheKey(int id) => $"doctor:{id}";
         
         public async Task<Result<IEnumerable<Doctor>>> GetAllAsync(CancellationToken cancellationToken)
         {
-            var doctors = await _context.Doctor.AsNoTracking().ToListAsync(cancellationToken);
+            var doctors = await _cache.GetOrCreateAsync(
+                DoctorsAllCacheKey,
+                async cancel => await _context.Doctor.AsNoTracking().ToListAsync(cancel),
+                new HybridCacheEntryOptions
+                {
+                    Expiration = TimeSpan.FromMinutes(10),
+                    LocalCacheExpiration = TimeSpan.FromMinutes(10)
+                },
+                cancellationToken: cancellationToken
+            );
+            
             return Result.Success<IEnumerable<Doctor>>(doctors);
         }
 
         public async Task<Result<Doctor>> GetAsync(int id, CancellationToken cancellationToken)
         {
-            var doctor = await _context.Doctor.FindAsync([id], cancellationToken);
+            var doctor = await _cache.GetOrCreateAsync(
+                GetDoctorCacheKey(id),
+                async cancel => await _context.Doctor.FindAsync([id], cancel),
+                new HybridCacheEntryOptions
+                {
+                    Expiration = TimeSpan.FromMinutes(10),
+                    LocalCacheExpiration = TimeSpan.FromMinutes(10)
+                },
+                cancellationToken: cancellationToken
+            );
             
             return doctor is null 
                 ? Result.Failure<Doctor>(DoctorErrors.NotFound)
@@ -33,6 +56,10 @@ namespace ClinicManagementSystem.api.Services
             {
                 await _context.Doctor.AddAsync(doctor, cancellationToken);
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Invalidate list cache
+                await _cache.RemoveAsync(DoctorsAllCacheKey, cancellationToken);
+                
                 return Result.Success(doctor);
             }
             catch (DbUpdateException ex)
@@ -83,6 +110,11 @@ namespace ClinicManagementSystem.api.Services
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Invalidate both specific and list caches
+                await _cache.RemoveAsync(GetDoctorCacheKey(id), cancellationToken);
+                await _cache.RemoveAsync(DoctorsAllCacheKey, cancellationToken);
+                
                 return Result.Success();
             }
             catch (DbUpdateConcurrencyException)
@@ -122,6 +154,11 @@ namespace ClinicManagementSystem.api.Services
             {
                 _context.Remove(doctor);
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Invalidate both specific and list caches
+                await _cache.RemoveAsync(GetDoctorCacheKey(id), cancellationToken);
+                await _cache.RemoveAsync(DoctorsAllCacheKey, cancellationToken);
+                
                 return Result.Success();
             }
             catch (DbUpdateException ex)

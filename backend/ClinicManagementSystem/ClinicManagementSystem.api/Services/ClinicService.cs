@@ -1,19 +1,42 @@
-﻿
+﻿using Microsoft.Extensions.Caching.Hybrid;
+
 namespace ClinicManagementSystem.api.Services
 {
-    public class ClinicService(ApplicationDbContext context) : IClinicService
+    public class ClinicService(ApplicationDbContext context, HybridCache cache) : IClinicService
     {
         private readonly ApplicationDbContext _context = context;
+        private readonly HybridCache _cache = cache;
+        private const string ClinicsAllCacheKey = "clinics:all";
+        private static string GetClinicCacheKey(int id) => $"clinic:{id}";
         
         public async Task<Result<IEnumerable<Clinic>>> GetAllAsync(CancellationToken cancellationToken)
         {
-            var clinics = await _context.Clinics.AsNoTracking().ToListAsync(cancellationToken);
+            var clinics = await _cache.GetOrCreateAsync(
+                ClinicsAllCacheKey,
+                async cancel => await _context.Clinics.AsNoTracking().ToListAsync(cancel),
+                new HybridCacheEntryOptions
+                {
+                    Expiration = TimeSpan.FromMinutes(10),
+                    LocalCacheExpiration = TimeSpan.FromMinutes(10)
+                },
+                cancellationToken: cancellationToken
+            );
+            
             return Result.Success<IEnumerable<Clinic>>(clinics);
         }
 
         public async Task<Result<Clinic>> GetAsync(int id, CancellationToken cancellationToken)
         {
-            var clinic = await _context.Clinics.FindAsync([id], cancellationToken);
+            var clinic = await _cache.GetOrCreateAsync(
+                GetClinicCacheKey(id),
+                async cancel => await _context.Clinics.FindAsync([id], cancel),
+                new HybridCacheEntryOptions
+                {
+                    Expiration = TimeSpan.FromMinutes(10),
+                    LocalCacheExpiration = TimeSpan.FromMinutes(10)
+                },
+                cancellationToken: cancellationToken
+            );
             
             return clinic is null
                 ? Result.Failure<Clinic>(ClinicErrors.NotFound)
@@ -26,6 +49,10 @@ namespace ClinicManagementSystem.api.Services
             {
                 await _context.Clinics.AddAsync(clinic, cancellationToken);
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Invalidate list cache
+                await _cache.RemoveAsync(ClinicsAllCacheKey, cancellationToken);
+                
                 return Result.Success(clinic);
             }
             catch (DbUpdateException ex)
@@ -60,6 +87,11 @@ namespace ClinicManagementSystem.api.Services
             try
             {
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Invalidate both specific and list caches
+                await _cache.RemoveAsync(GetClinicCacheKey(id), cancellationToken);
+                await _cache.RemoveAsync(ClinicsAllCacheKey, cancellationToken);
+                
                 return Result.Success();
             }
             catch (DbUpdateConcurrencyException)
@@ -96,6 +128,11 @@ namespace ClinicManagementSystem.api.Services
             {
                 _context.Remove(clinic);
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Invalidate both specific and list caches
+                await _cache.RemoveAsync(GetClinicCacheKey(id), cancellationToken);
+                await _cache.RemoveAsync(ClinicsAllCacheKey, cancellationToken);
+                
                 return Result.Success();
             }
             catch (DbUpdateException ex)
