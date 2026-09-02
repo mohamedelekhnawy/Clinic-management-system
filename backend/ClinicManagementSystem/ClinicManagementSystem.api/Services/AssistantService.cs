@@ -1,25 +1,49 @@
+using Microsoft.Extensions.Caching.Hybrid;
+
 namespace ClinicManagementSystem.api.Services;
 
-public class AssistantService(ApplicationDbContext context) : IAssistantService
+public class AssistantService(ApplicationDbContext context, HybridCache cache) : IAssistantService
 {
     private readonly ApplicationDbContext _context = context;
+    private readonly HybridCache _cache = cache;
+    private const string AssistantsAllCacheKey = "assistants:all";
+    private static string GetAssistantCacheKey(int id) => $"assistant:{id}";
+    private static string GetAssistantsByClinicCacheKey(int clinicId) => $"assistants:clinic:{clinicId}";
 
     public async Task<Result<IEnumerable<Models.Assistant>>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var assistants = await _context.Assistants
-            .Include(a => a.Clinic)
-            .AsNoTracking()
-            .OrderByDescending(a => a.CreatedOn)
-            .ToListAsync(cancellationToken);
+        var assistants = await _cache.GetOrCreateAsync(
+            AssistantsAllCacheKey,
+            async cancel => await _context.Assistants
+                .Include(a => a.Clinic)
+                .AsNoTracking()
+                .OrderByDescending(a => a.CreatedOn)
+                .ToListAsync(cancel),
+            new HybridCacheEntryOptions
+            {
+                Expiration = TimeSpan.FromMinutes(10),
+                LocalCacheExpiration = TimeSpan.FromMinutes(10)
+            },
+            cancellationToken: cancellationToken
+        );
 
         return Result.Success<IEnumerable<Models.Assistant>>(assistants);
     }
 
     public async Task<Result<Models.Assistant>> GetAsync(int id, CancellationToken cancellationToken = default)
     {
-        var assistant = await _context.Assistants
-            .Include(a => a.Clinic)
-            .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+        var assistant = await _cache.GetOrCreateAsync(
+            GetAssistantCacheKey(id),
+            async cancel => await _context.Assistants
+                .Include(a => a.Clinic)
+                .FirstOrDefaultAsync(a => a.Id == id, cancel),
+            new HybridCacheEntryOptions
+            {
+                Expiration = TimeSpan.FromMinutes(10),
+                LocalCacheExpiration = TimeSpan.FromMinutes(10)
+            },
+            cancellationToken: cancellationToken
+        );
 
         return assistant is null
             ? Result.Failure<Models.Assistant>(AssistantErrors.NotFound)
@@ -40,6 +64,10 @@ public class AssistantService(ApplicationDbContext context) : IAssistantService
 
             // Load clinic for response
             await _context.Entry(assistant).Reference(a => a.Clinic).LoadAsync(cancellationToken);
+
+            // Invalidate caches
+            await _cache.RemoveAsync(AssistantsAllCacheKey, cancellationToken);
+            await _cache.RemoveAsync(GetAssistantsByClinicCacheKey(assistant.ClinicId), cancellationToken);
 
             return Result.Success(assistant);
         }
@@ -67,6 +95,9 @@ public class AssistantService(ApplicationDbContext context) : IAssistantService
         if (currentAssistant is null)
             return Result.Failure(AssistantErrors.NotFound);
 
+        // Store old clinic ID for cache invalidation
+        var oldClinicId = currentAssistant.ClinicId;
+
         // Validate that clinic exists if changing clinic
         if (currentAssistant.ClinicId != assistant.ClinicId)
         {
@@ -87,6 +118,18 @@ public class AssistantService(ApplicationDbContext context) : IAssistantService
         try
         {
             await _context.SaveChangesAsync(cancellationToken);
+            
+            // Invalidate caches
+            await _cache.RemoveAsync(GetAssistantCacheKey(id), cancellationToken);
+            await _cache.RemoveAsync(AssistantsAllCacheKey, cancellationToken);
+            await _cache.RemoveAsync(GetAssistantsByClinicCacheKey(oldClinicId), cancellationToken);
+            
+            // If clinic changed, invalidate new clinic cache too
+            if (oldClinicId != assistant.ClinicId)
+            {
+                await _cache.RemoveAsync(GetAssistantsByClinicCacheKey(assistant.ClinicId), cancellationToken);
+            }
+            
             return Result.Success();
         }
         catch (DbUpdateConcurrencyException)
@@ -122,10 +165,18 @@ public class AssistantService(ApplicationDbContext context) : IAssistantService
         if (assistant is null)
             return Result.Failure(AssistantErrors.NotFound);
 
+        var clinicId = assistant.ClinicId;
+
         try
         {
             _context.Remove(assistant);
             await _context.SaveChangesAsync(cancellationToken);
+            
+            // Invalidate caches
+            await _cache.RemoveAsync(GetAssistantCacheKey(id), cancellationToken);
+            await _cache.RemoveAsync(AssistantsAllCacheKey, cancellationToken);
+            await _cache.RemoveAsync(GetAssistantsByClinicCacheKey(clinicId), cancellationToken);
+            
             return Result.Success();
         }
         catch (DbUpdateException ex)
@@ -143,12 +194,21 @@ public class AssistantService(ApplicationDbContext context) : IAssistantService
 
     public async Task<Result<IEnumerable<Models.Assistant>>> GetByClinicIdAsync(int clinicId, CancellationToken cancellationToken = default)
     {
-        var assistants = await _context.Assistants
-            .Include(a => a.Clinic)
-            .AsNoTracking()
-            .Where(a => a.ClinicId == clinicId)
-            .OrderByDescending(a => a.CreatedOn)
-            .ToListAsync(cancellationToken);
+        var assistants = await _cache.GetOrCreateAsync(
+            GetAssistantsByClinicCacheKey(clinicId),
+            async cancel => await _context.Assistants
+                .Include(a => a.Clinic)
+                .AsNoTracking()
+                .Where(a => a.ClinicId == clinicId)
+                .OrderByDescending(a => a.CreatedOn)
+                .ToListAsync(cancel),
+            new HybridCacheEntryOptions
+            {
+                Expiration = TimeSpan.FromMinutes(10),
+                LocalCacheExpiration = TimeSpan.FromMinutes(10)
+            },
+            cancellationToken: cancellationToken
+        );
 
         return Result.Success<IEnumerable<Models.Assistant>>(assistants);
     }
