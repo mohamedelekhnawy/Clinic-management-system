@@ -4,6 +4,7 @@ using ClinicManagementSystem.api.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace ClinicManagementSystem.api.Persistence.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260807144125_AddPatientAndAssistantTables")]
+    partial class AddPatientAndAssistantTables
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -95,76 +98,6 @@ namespace ClinicManagementSystem.api.Persistence.Migrations
                         .HasFilter("[NormalizedUserName] IS NOT NULL");
 
                     b.ToTable("AspNetUsers", (string)null);
-                });
-
-            modelBuilder.Entity("ClinicManagementSystem.api.Models.Appointment", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateTime?>("ActualEndTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("ActualStartTime")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateOnly>("AppointmentDate")
-                        .HasColumnType("date");
-
-                    b.Property<DateTime?>("CheckedInAt")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("CreatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime>("CreatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.Property<int>("DoctorId")
-                        .HasColumnType("int");
-
-                    b.Property<TimeOnly>("EndTime")
-                        .HasColumnType("time");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(1000)
-                        .HasColumnType("nvarchar(1000)");
-
-                    b.Property<int>("PatientId")
-                        .HasColumnType("int");
-
-                    b.Property<TimeOnly>("StartTime")
-                        .HasColumnType("time");
-
-                    b.Property<int>("Status")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int")
-                        .HasDefaultValue(1);
-
-                    b.Property<string>("UpdatedBy")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<DateTime?>("UpdatedOn")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Status")
-                        .HasDatabaseName("IX_Appointments_Status");
-
-                    b.HasIndex("PatientId", "AppointmentDate")
-                        .HasDatabaseName("IX_Appointments_Patient_Date");
-
-                    b.HasIndex("Status", "AppointmentDate")
-                        .HasDatabaseName("IX_Appointments_Status_Date");
-
-                    b.HasIndex("DoctorId", "AppointmentDate", "StartTime")
-                        .HasDatabaseName("IX_Appointments_Doctor_Date_Time");
-
-                    b.ToTable("Appointments", (string)null);
                 });
 
             modelBuilder.Entity("ClinicManagementSystem.api.Models.Assistant", b =>
@@ -294,7 +227,7 @@ namespace ClinicManagementSystem.api.Persistence.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Clinics", (string)null);
+                    b.ToTable("Clinics");
                 });
 
             modelBuilder.Entity("ClinicManagementSystem.api.Models.Doctor", b =>
@@ -378,7 +311,7 @@ namespace ClinicManagementSystem.api.Persistence.Migrations
 
                     b.HasIndex("ClinicId");
 
-                    b.ToTable("Doctor", (string)null);
+                    b.ToTable("Doctor");
                 });
 
             modelBuilder.Entity("ClinicManagementSystem.api.Models.Patient", b =>
@@ -651,25 +584,6 @@ namespace ClinicManagementSystem.api.Persistence.Migrations
                         });
 
                     b.Navigation("RefreshTokens");
-                });
-
-            modelBuilder.Entity("ClinicManagementSystem.api.Models.Appointment", b =>
-                {
-                    b.HasOne("ClinicManagementSystem.api.Models.Doctor", "Doctor")
-                        .WithMany()
-                        .HasForeignKey("DoctorId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("ClinicManagementSystem.api.Models.Patient", "Patient")
-                        .WithMany()
-                        .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.Navigation("Doctor");
-
-                    b.Navigation("Patient");
                 });
 
             modelBuilder.Entity("ClinicManagementSystem.api.Models.Assistant", b =>
