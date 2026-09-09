@@ -35,6 +35,13 @@ try
             diagnosticContext.Set("RequestScheme", httpContext.Request.Scheme);
             diagnosticContext.Set("UserAgent", httpContext.Request.Headers["User-Agent"].ToString());
         };
+        // Exclude Hangfire dashboard polling — it hits /hangfire/stats every few seconds and adds no value to logs
+        options.GetLevel = (httpContext, elapsed, ex) =>
+        {
+            if (httpContext.Request.Path.StartsWithSegments("/hangfire"))
+                return Serilog.Events.LogEventLevel.Verbose; // Verbose is below the minimum level — effectively suppressed
+            return ex is not null ? Serilog.Events.LogEventLevel.Error : Serilog.Events.LogEventLevel.Information;
+        };
     });
 
     // Global exception handler - must be first in pipeline
