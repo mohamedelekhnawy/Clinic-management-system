@@ -28,6 +28,26 @@ namespace ClinicManagementSystem.api.Controllers
                 : this.Problem(authResult.Error, StatusCodes.Status400BadRequest);
         }
 
+        [HttpPost("verify-email")]
+        public async Task<IActionResult> VerifyEmailAsync(VerifyEmailRequest request, CancellationToken cancellationToken)
+        {
+            var result = await authService.VerifyEmailAsync(request.Email, request.Code, cancellationToken);
+            
+            return result.IsSuccess 
+                ? Ok(result.Value) 
+                : this.Problem(result.Error, StatusCodes.Status400BadRequest);
+        }
+
+        [HttpPost("resend-verification")]
+        public async Task<IActionResult> ResendVerificationCodeAsync(ResendVerificationCodeRequest request, CancellationToken cancellationToken)
+        {
+            var result = await authService.ResendVerificationCodeAsync(request.Email, cancellationToken);
+            
+            return result.IsSuccess 
+                ? Ok(result.Value) 
+                : this.Problem(result.Error, StatusCodes.Status400BadRequest);
+        }
+
         [HttpPost("refresh")]
         public async Task<IActionResult> RefreshTokenAsync(RefreshTokenRequest request, CancellationToken cancellationToken)
         {

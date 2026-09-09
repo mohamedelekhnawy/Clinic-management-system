@@ -1,8 +1,4 @@
-﻿using ClinicManagementSystem.api.Authentication;
-using ClinicManagementSystem.api.Persistence;
-using ClinicManagementSystem.api.Middleware;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
+﻿using ClinicManagementSystem.api.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -24,7 +20,8 @@ namespace ClinicManagementSystem.api
                 .AddFluentValidationConfig()
                 .AddDIsConfig()
                 .AddDbConfig(configuration)
-                .AddHybridCacheConfig(configuration);
+                .AddHybridCacheConfig(configuration)
+                .AddEmailConfig(configuration);
 
             return services;
         }
@@ -147,6 +144,7 @@ namespace ClinicManagementSystem.api
             services.AddScoped<IAssistantService, AssistantService>();
             services.AddScoped<IAuthService, AuthService>();
             services.AddScoped<IAppointmentService, AppointmentService>();
+            services.AddScoped<IEmailService, EmailService>();
 
             return services;
         }
@@ -217,6 +215,36 @@ namespace ClinicManagementSystem.api
                     LocalCacheExpiration = TimeSpan.FromMinutes(configuration.GetValue<int?>("HybridCache:LocalCacheExpirationMinutes") ?? 5)
                 };
             });
+
+            return services;
+        }
+
+        public static IServiceCollection AddEmailConfig(this IServiceCollection services, IConfiguration configuration)
+        {
+            services.AddOptions<EmailOptions>()
+                .Bind(configuration.GetSection(EmailOptions.SectionName));
+
+            var emailSettings = configuration.GetSection(EmailOptions.SectionName).Get<EmailOptions>();
+
+            // Skip validation if email settings are not configured (allows running without email in development)
+            if (emailSettings == null || string.IsNullOrEmpty(emailSettings.Host) || string.IsNullOrEmpty(emailSettings.Username))
+            {
+                // Log warning that email service is not configured
+                return services;
+            }
+
+            // Optional runtime validation for production (only validate if partially configured)
+            if (emailSettings.Port < 1 || emailSettings.Port > 65535)
+                throw new InvalidOperationException("Email Port must be between 1 and 65535.");
+
+            if (string.IsNullOrEmpty(emailSettings.Password))
+                throw new InvalidOperationException("Email Password is not configured but Username is set.");
+
+            if (string.IsNullOrEmpty(emailSettings.FromEmail))
+                throw new InvalidOperationException("Email FromEmail is not configured but Username is set.");
+
+            if (string.IsNullOrEmpty(emailSettings.FromName))
+                throw new InvalidOperationException("Email FromName is not configured but Username is set.");
 
             return services;
         }
