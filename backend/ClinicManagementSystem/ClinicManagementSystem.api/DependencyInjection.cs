@@ -1,4 +1,6 @@
 ﻿using ClinicManagementSystem.api.Middleware;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -21,7 +23,8 @@ namespace ClinicManagementSystem.api
                 .AddDIsConfig()
                 .AddDbConfig(configuration)
                 .AddHybridCacheConfig(configuration)
-                .AddEmailConfig(configuration);
+                .AddEmailConfig(configuration)
+                .AddHangfireConfig(configuration);
 
             return services;
         }
@@ -245,6 +248,30 @@ namespace ClinicManagementSystem.api
 
             if (string.IsNullOrEmpty(emailSettings.FromName))
                 throw new InvalidOperationException("Email FromName is not configured but Username is set.");
+
+            return services;
+        }
+
+        public static IServiceCollection AddHangfireConfig(this IServiceCollection services, IConfiguration configuration)
+        {
+            var hangfireConnectionString = configuration.GetConnectionString("HangfireConnection")
+                ?? throw new InvalidOperationException("Connection string 'HangfireConnection' not found.");
+
+            services.AddHangfire(config => config
+                .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+                .UseSimpleAssemblyNameTypeSerializer()
+                .UseRecommendedSerializerSettings()
+                .UseSqlServerStorage(hangfireConnectionString, new SqlServerStorageOptions
+                {
+                    CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                    SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    QueuePollInterval = TimeSpan.Zero,
+                    UseRecommendedIsolationLevel = true,
+                    DisableGlobalLocks = true,
+                    PrepareSchemaIfNecessary = true  // auto-creates HangFire schema tables on first run
+                }));
+
+            services.AddHangfireServer();
 
             return services;
         }

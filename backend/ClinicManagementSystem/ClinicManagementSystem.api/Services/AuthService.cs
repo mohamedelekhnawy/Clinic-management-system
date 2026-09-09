@@ -1,4 +1,5 @@
 ﻿
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
@@ -9,11 +10,13 @@ namespace ClinicManagementSystem.api.Services
         UserManager<ApplicationUser> userManager, 
         IJwtProvider jwtProvider,
         IEmailService emailService,
+        IBackgroundJobClient backgroundJobClient,
         ILogger<AuthService> logger) : IAuthService
     {
         private readonly UserManager<ApplicationUser> _userManager = userManager;
         private readonly IJwtProvider _jwtProvider = jwtProvider;
         private readonly IEmailService _emailService = emailService;
+        private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;
         private readonly ILogger<AuthService> _logger = logger;
 
         public async Task<Result<AuthResponse>> GetTokenAsync(string email, string password, CancellationToken cancellationToken = default)
@@ -97,17 +100,10 @@ namespace ClinicManagementSystem.api.Services
 
                 await _userManager.UpdateAsync(user);
 
-                // Send verification email
-                try
-                {
-                    await _emailService.SendVerificationCodeAsync(user.Email!, user.FirstName, verificationCode, cancellationToken);
-                    _logger.LogInformation("Verification email sent to {Email} for user {UserId}", user.Email, user.Id);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to send verification email to {Email}", user.Email);
-                    // Continue - user created but email failed. They can use resend.
-                }
+                // Enqueue verification email as a Hangfire background job — HTTP request returns immediately
+                _backgroundJobClient.Enqueue<IEmailService>(
+                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.FirstName, verificationCode, CancellationToken.None));
+                _logger.LogInformation("Verification email job enqueued for {Email}, user {UserId}", user.Email, user.Id);
 
                 var response = new VerificationResponse("Registration successful. Please check your email for verification code.");
                 return Result.Success(response);
@@ -277,17 +273,10 @@ namespace ClinicManagementSystem.api.Services
 
                 await _userManager.UpdateAsync(user);
 
-                // Send verification email
-                try
-                {
-                    await _emailService.SendVerificationCodeAsync(user.Email!, user.FirstName, verificationCode, cancellationToken);
-                    _logger.LogInformation("Verification code resent to {Email} for user {UserId}", user.Email, user.Id);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to resend verification email to {Email}", user.Email);
-                    throw; // Email sending failure should fail the operation
-                }
+                // Enqueue verification email as a Hangfire background job — HTTP request returns immediately
+                _backgroundJobClient.Enqueue<IEmailService>(
+                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.FirstName, verificationCode, CancellationToken.None));
+                _logger.LogInformation("Verification email job enqueued for {Email}, user {UserId}", user.Email, user.Id);
 
                 var response = new VerificationResponse("Verification code sent. Please check your email.");
                 return Result.Success(response);
