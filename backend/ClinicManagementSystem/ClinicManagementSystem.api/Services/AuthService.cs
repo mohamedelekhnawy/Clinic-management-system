@@ -56,7 +56,7 @@ namespace ClinicManagementSystem.api.Services
 
                 _logger.LogInformation("User {UserId} logged in successfully", user.Id);
 
-                var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, token, expiresIn, refreshToken, refreshTokenExpiration);
+                var response = new AuthResponse(user.Id, user.Email, user.FirstName_EN, user.FirstName_AR, user.LastName_EN, user.LastName_AR, token, expiresIn, refreshToken, refreshTokenExpiration);
                 return Result.Success(response);
             }
             catch (DbUpdateException)
@@ -66,7 +66,7 @@ namespace ClinicManagementSystem.api.Services
             }
         }
 
-        public async Task<Result<VerificationResponse>> RegisterAsync(string firstName, string lastName, string email, string password, CancellationToken cancellationToken = default)
+        public async Task<Result<VerificationResponse>> RegisterAsync(string firstNameEN, string? firstNameAR, string lastNameEN, string? lastNameAR, string email, string password, CancellationToken cancellationToken = default)
         {
             var existingUser = await _userManager.FindByEmailAsync(email);
             if (existingUser is not null)
@@ -74,8 +74,10 @@ namespace ClinicManagementSystem.api.Services
 
             var user = new ApplicationUser
             {
-                FirstName = firstName,
-                LastName = lastName,
+                FirstName_EN = firstNameEN,
+                FirstName_AR = firstNameAR,
+                LastName_EN = lastNameEN,
+                LastName_AR = lastNameAR,
                 Email = email,
                 UserName = email,
                 IsEmailVerified = false
@@ -203,7 +205,7 @@ namespace ClinicManagementSystem.api.Services
 
                 await _userManager.UpdateAsync(user);
 
-                var response = new AuthResponse(user.Id, user.Email, user.FirstName, user.LastName, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
+                var response = new AuthResponse(user.Id, user.Email, user.FirstName_EN, user.FirstName_AR, user.LastName_EN, user.LastName_AR, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
                 return Result.Success(response);
             }
             catch (DbUpdateException)

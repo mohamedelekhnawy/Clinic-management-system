@@ -4,13 +4,25 @@
     {
         public void Configure(EntityTypeBuilder<ApplicationUser> builder)
         {
-            builder.Property(c => c.FirstName)
+            builder.Property(c => c.FirstName_EN)
                 .IsRequired()
+                .HasMaxLength(100);
+            
+            builder.Property(c => c.FirstName_AR)
+                .IsRequired(false)
                 .HasMaxLength(100);
 
-            builder.Property(c => c.LastName)
+            builder.Property(c => c.LastName_EN)
                 .IsRequired()
                 .HasMaxLength(100);
+            
+            builder.Property(c => c.LastName_AR)
+                .IsRequired(false)
+                .HasMaxLength(100);
+            
+            // Ignore computed properties
+            builder.Ignore(c => c.FirstName);
+            builder.Ignore(c => c.LastName);
 
             builder.OwnsMany(u => u.RefreshTokens, rt =>
             {

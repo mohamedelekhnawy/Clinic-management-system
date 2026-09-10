@@ -21,7 +21,7 @@ namespace ClinicManagementSystem.api.Controllers
         [HttpPost("register")]
         public async Task<IActionResult> RegisterAsync(RegisterRequest request, CancellationToken cancellationToken)
         {
-            var result = await _authService.RegisterAsync(request.FirstName, request.LastName, request.Email, request.Password, cancellationToken);
+            var result = await _authService.RegisterAsync(request.FirstName_EN, request.FirstName_AR, request.LastName_EN, request.LastName_AR, request.Email, request.Password, cancellationToken);
 
             return result.IsSuccess
                 ? Ok(result.Value)

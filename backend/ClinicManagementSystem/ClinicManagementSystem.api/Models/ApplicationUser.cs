@@ -2,8 +2,24 @@
 {
     public sealed class ApplicationUser : IdentityUser
     {
-        public string FirstName { get; set; } = string.Empty;
-        public string LastName { get; set; } = string.Empty;
+        public string FirstName_EN { get; set; } = string.Empty;
+        public string? FirstName_AR { get; set; }
+        public string LastName_EN { get; set; } = string.Empty;
+        public string? LastName_AR { get; set; }
+        
+        // Backward compatibility properties - use English by default
+        public string FirstName 
+        { 
+            get => FirstName_EN; 
+            set => FirstName_EN = value; 
+        }
+        
+        public string LastName 
+        { 
+            get => LastName_EN; 
+            set => LastName_EN = value; 
+        }
+        
         public List<RefreshToken> RefreshTokens { get; set; } = new();
 
         // Email Verification Properties

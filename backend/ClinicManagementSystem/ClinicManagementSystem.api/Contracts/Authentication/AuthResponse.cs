@@ -3,8 +3,10 @@
     public record AuthResponse(
         string Id,
         string? Email,
-        string FirstName,
-        string LastName,
+        string FirstName_EN,
+        string? FirstName_AR,
+        string LastName_EN,
+        string? LastName_AR,
         string Token,
         int ExpiresIn,
         string RefreshToken,
