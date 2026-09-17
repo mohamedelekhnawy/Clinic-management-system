@@ -21,4 +21,9 @@ public static class ProfileErrors
         "Profile.HasDependentRecords",
         "Cannot delete profile because it has dependent records",
         ErrorType.Conflict);
+
+    public static readonly Error UserHasNoProfile = new(
+        "Profile.UserHasNoProfile",
+        "User does not have a profile",
+        ErrorType.NotFound);
 }

@@ -22,6 +22,11 @@ namespace ClinicManagementSystem.api.Contracts.Authentication
                 .MaximumLength(50)
                 .When(x => !string.IsNullOrEmpty(x.LastName_AR));
 
+            RuleFor(x => x.Phone)
+                .NotEmpty().WithMessage("Phone number is required")
+                .MaximumLength(20).WithMessage("Phone number cannot exceed 20 characters")
+                .Matches(@"^\+?[0-9\s\-\(\)]+$").WithMessage("Phone number format is invalid");
+
             RuleFor(x => x.Email)
                 .NotEmpty()
                 .EmailAddress();

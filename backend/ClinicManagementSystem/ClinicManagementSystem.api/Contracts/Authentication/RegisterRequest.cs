@@ -5,6 +5,7 @@ namespace ClinicManagementSystem.api.Contracts.Authentication
         string? FirstName_AR,
         string LastName_EN,
         string? LastName_AR,
+        string Phone,
         string Email,
         string Password
     );

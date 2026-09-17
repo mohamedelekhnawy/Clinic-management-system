@@ -66,17 +66,43 @@ namespace ClinicManagementSystem.api.Services
             }
         }
 
-        public async Task<Result<RegisterResponse>> RegisterAsync(string firstNameEN, string? firstNameAR, string lastNameEN, string? lastNameAR, string email, string password, CancellationToken cancellationToken = default)
+        public async Task<Result<RegisterResponse>> RegisterAsync(string firstNameEN, string? firstNameAR, string lastNameEN, string? lastNameAR, string phone, string email, string password, CancellationToken cancellationToken = default)
         {
             // Check if email already exists - RefreshTokens won't be loaded due to AutoInclude(false)
             var existingUser = await _userManager.FindByEmailAsync(email);
             if (existingUser is not null)
                 return Result.Failure<RegisterResponse>(AuthErrors.EmailAlreadyExists);
 
+            // Check if phone already exists in Profiles
+            var existingProfile = await _context.Profiles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Phone == phone, cancellationToken);
+            if (existingProfile is not null)
+                return Result.Failure<RegisterResponse>(ProfileErrors.DuplicatePhone);
+
+            // Check if email already exists in Profiles
+            var existingProfileByEmail = await _context.Profiles
+                .AsNoTracking()
+                .FirstOrDefaultAsync(p => p.Email == email, cancellationToken);
+            if (existingProfileByEmail is not null)
+                return Result.Failure<RegisterResponse>(ProfileErrors.DuplicateEmail);
+
             // Generate verification code upfront before user creation
             var verificationCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
             var expirationTime = DateTime.UtcNow.AddMinutes(15);
             var currentTime = DateTime.UtcNow;
+
+            // Create Profile first
+            var profile = new Profile
+            {
+                FirstName_En = firstNameEN,
+                FirstName_Ar = firstNameAR ?? string.Empty,
+                LastName_En = lastNameEN,
+                LastName_Ar = lastNameAR ?? string.Empty,
+                Phone = phone,
+                Email = email,
+                IsActive = true
+            };
 
             // Initialize user with all fields including verification data to avoid extra UpdateAsync
             var user = new ApplicationUser
@@ -91,32 +117,65 @@ namespace ClinicManagementSystem.api.Services
 
             try
             {
-                // Password hashing happens here (~200-400ms, intentional for security)
-                var result = await _userManager.CreateAsync(user, password);
-                if (!result.Succeeded)
-                {
-                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                    return Result.Failure<RegisterResponse>(new Error("Auth.RegistrationFailed", errors, ErrorType.Validation));
-                }
-
-                // Enqueue verification email as Hangfire background job
-                _backgroundJobClient.Enqueue<IEmailService>(
-                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.Email!, verificationCode, CancellationToken.None));
+                // Start a transaction to ensure atomicity
+                using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
                 
-                _logger.LogInformation("User {UserId} registered successfully. Verification email job enqueued for {Email}", user.Id, user.Email);
+                try
+                {
+                    // Add profile and save to get its ID
+                    await _context.Profiles.AddAsync(profile, cancellationToken);
+                    await _context.SaveChangesAsync(cancellationToken);
 
-                return Result.Success(new RegisterResponse(
-                    user.Id,
-                    user.Email!,
-                    "Registration successful. Please check your email for verification code."
-                ));
+                    // Link the profile to the user
+                    user.ProfileId = profile.Id;
+
+                    // Password hashing happens here (~200-400ms, intentional for security)
+                    var result = await _userManager.CreateAsync(user, password);
+                    if (!result.Succeeded)
+                    {
+                        var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                        await transaction.RollbackAsync(cancellationToken);
+                        return Result.Failure<RegisterResponse>(new Error("Auth.RegistrationFailed", errors, ErrorType.Validation));
+                    }
+
+                    // Update Profile with the ApplicationUserId after user creation
+                    profile.ApplicationUserId = user.Id;
+                    await _context.SaveChangesAsync(cancellationToken);
+
+                    // Commit the transaction
+                    await transaction.CommitAsync(cancellationToken);
+
+                    // Enqueue verification email as Hangfire background job
+                    _backgroundJobClient.Enqueue<IEmailService>(
+                        emailService => emailService.SendVerificationCodeAsync(user.Email!, user.Email!, verificationCode, CancellationToken.None));
+                    
+                    _logger.LogInformation("User {UserId} registered successfully with Profile {ProfileId}. Verification email job enqueued for {Email}", 
+                        user.Id, profile.Id, user.Email);
+
+                    return Result.Success(new RegisterResponse(
+                        user.Id,
+                        user.Email!,
+                        "Registration successful. Please check your email for verification code."
+                    ));
+                }
+                catch
+                {
+                    await transaction.RollbackAsync(cancellationToken);
+                    throw;
+                }
             }
             catch (DbUpdateException ex)
             {
-                // Check for duplicate email constraint
+                // Check for duplicate constraints
                 if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
                     ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
                 {
+                    if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
+                        return Result.Failure<RegisterResponse>(ProfileErrors.DuplicateEmail);
+
+                    if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
+                        return Result.Failure<RegisterResponse>(ProfileErrors.DuplicatePhone);
+                    
                     return Result.Failure<RegisterResponse>(AuthErrors.EmailAlreadyExists);
                 }
                 
