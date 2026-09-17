@@ -1,12 +1,14 @@
 namespace ClinicManagementSystem.api.Services;
 
-public class PatientService(ApplicationDbContext context) : IPatientService
+public class PatientService(ApplicationDbContext context, IProfileService profileService) : IPatientService
 {
     private readonly ApplicationDbContext _context = context;
+    private readonly IProfileService _profileService = profileService;
 
     public async Task<Result<IEnumerable<Models.Patient>>> GetAllAsync(CancellationToken cancellationToken = default)
     {
         var patients = await _context.Patients
+            .Include(p => p.Profile)
             .AsNoTracking()
             .OrderByDescending(p => p.CreatedOn)
             .ToListAsync(cancellationToken);
@@ -16,7 +18,9 @@ public class PatientService(ApplicationDbContext context) : IPatientService
 
     public async Task<Result<Models.Patient>> GetAsync(int id, CancellationToken cancellationToken = default)
     {
-        var patient = await _context.Patients.FindAsync([id], cancellationToken);
+        var patient = await _context.Patients
+            .Include(p => p.Profile)
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
 
         return patient is null
             ? Result.Failure<Models.Patient>(PatientErrors.NotFound)
@@ -29,33 +33,32 @@ public class PatientService(ApplicationDbContext context) : IPatientService
         if (patient.DateOfBirth >= DateOnly.FromDateTime(DateTime.Today))
             return Result.Failure<Models.Patient>(PatientErrors.InvalidDateOfBirth);
 
+        // Note: Profile should be created and assigned from controller
+        // This assumes ProfileId is already set on patient entity
+
         try
         {
             await _context.Patients.AddAsync(patient, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
+            
+            // Load profile for response
+            await _context.Entry(patient).Reference(p => p.Profile).LoadAsync(cancellationToken);
+            
             return Result.Success(patient);
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException)
         {
-            // Check for duplicate constraint violations
-            if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
-                ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure<Models.Patient>(PatientErrors.DuplicateEmail);
-
-                if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure<Models.Patient>(PatientErrors.DuplicatePhone);
-            }
-
-            // Let other database errors bubble up to global handler
+            // Profile-related errors will be caught here
             throw;
         }
     }
 
     public async Task<Result> UpdateAsync(int id, Models.Patient patient, CancellationToken cancellationToken = default)
     {
-        var currentPatient = await _context.Patients.FindAsync([id], cancellationToken);
+        var currentPatient = await _context.Patients
+            .Include(p => p.Profile)
+            .FirstOrDefaultAsync(p => p.Id == id, cancellationToken);
+            
         if (currentPatient is null)
             return Result.Failure(PatientErrors.NotFound);
 
@@ -63,20 +66,14 @@ public class PatientService(ApplicationDbContext context) : IPatientService
         if (patient.DateOfBirth >= DateOnly.FromDateTime(DateTime.Today))
             return Result.Failure(PatientErrors.InvalidDateOfBirth);
 
-        currentPatient.FirstName_En = patient.FirstName_En;
-        currentPatient.FirstName_Ar = patient.FirstName_Ar;
-        currentPatient.LastName_En = patient.LastName_En;
-        currentPatient.LastName_Ar = patient.LastName_Ar;
+        // Update only patient-specific fields (Profile updated separately)
         currentPatient.DateOfBirth = patient.DateOfBirth;
         currentPatient.Gender = patient.Gender;
-        currentPatient.Phone = patient.Phone;
-        currentPatient.Email = patient.Email;
         currentPatient.Address_En = patient.Address_En;
         currentPatient.Address_Ar = patient.Address_Ar;
         currentPatient.EmergencyContactName = patient.EmergencyContactName;
         currentPatient.EmergencyContactPhone = patient.EmergencyContactPhone;
         currentPatient.Notes = patient.Notes;
-        currentPatient.IsActive = patient.IsActive;
 
         try
         {
@@ -89,22 +86,6 @@ public class PatientService(ApplicationDbContext context) : IPatientService
             var exists = await _context.Patients.AnyAsync(p => p.Id == id, cancellationToken);
             if (!exists)
                 return Result.Failure(PatientErrors.NotFound);
-
-            // Let concurrency exception bubble up to global handler
-            throw;
-        }
-        catch (DbUpdateException ex)
-        {
-            // Check for duplicate constraint violations
-            if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
-                ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure(PatientErrors.DuplicateEmail);
-
-                if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure(PatientErrors.DuplicatePhone);
-            }
 
             throw;
         }
@@ -141,14 +122,15 @@ public class PatientService(ApplicationDbContext context) : IPatientService
             return await GetAllAsync(cancellationToken);
 
         var patients = await _context.Patients
+            .Include(p => p.Profile)
             .AsNoTracking()
             .Where(p =>
-                p.FirstName_En.Contains(searchTerm) ||
-                p.FirstName_Ar.Contains(searchTerm) ||
-                p.LastName_En.Contains(searchTerm) ||
-                p.LastName_Ar.Contains(searchTerm) ||
-                p.Phone.Contains(searchTerm) ||
-                (p.Email != null && p.Email.Contains(searchTerm)))
+                p.Profile.FirstName_En.Contains(searchTerm) ||
+                p.Profile.FirstName_Ar.Contains(searchTerm) ||
+                p.Profile.LastName_En.Contains(searchTerm) ||
+                p.Profile.LastName_Ar.Contains(searchTerm) ||
+                p.Profile.Phone.Contains(searchTerm) ||
+                (p.Profile.Email != null && p.Profile.Email.Contains(searchTerm)))
             .OrderByDescending(p => p.CreatedOn)
             .ToListAsync(cancellationToken);
 

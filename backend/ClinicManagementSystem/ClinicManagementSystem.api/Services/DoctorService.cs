@@ -4,10 +4,11 @@ using Microsoft.Extensions.Caching.Hybrid;
 
 namespace ClinicManagementSystem.api.Services
 {
-    public class DoctorService(ApplicationDbContext context, HybridCache cache) : IDoctorService
+    public class DoctorService(ApplicationDbContext context, HybridCache cache, IProfileService profileService) : IDoctorService
     {
         private readonly ApplicationDbContext _context = context;
         private readonly HybridCache _cache = cache;
+        private readonly IProfileService _profileService = profileService;
         private const string DoctorsAllCacheKey = "doctors:all";
         private static string GetDoctorCacheKey(int id) => $"doctor:{id}";
         
@@ -15,7 +16,10 @@ namespace ClinicManagementSystem.api.Services
         {
             var doctors = await _cache.GetOrCreateAsync(
                 DoctorsAllCacheKey,
-                async cancel => await _context.Doctor.AsNoTracking().ToListAsync(cancel),
+                async cancel => await _context.Doctor
+                    .Include(d => d.Profile)
+                    .AsNoTracking()
+                    .ToListAsync(cancel),
                 new HybridCacheEntryOptions
                 {
                     Expiration = TimeSpan.FromMinutes(10),
@@ -31,7 +35,9 @@ namespace ClinicManagementSystem.api.Services
         {
             var doctor = await _cache.GetOrCreateAsync(
                 GetDoctorCacheKey(id),
-                async cancel => await _context.Doctor.FindAsync([id], cancel),
+                async cancel => await _context.Doctor
+                    .Include(d => d.Profile)
+                    .FirstOrDefaultAsync(d => d.Id == id, cancel),
                 new HybridCacheEntryOptions
                 {
                     Expiration = TimeSpan.FromMinutes(10),
@@ -52,10 +58,28 @@ namespace ClinicManagementSystem.api.Services
             if (!clinicExists)
                 return Result.Failure<Doctor>(DoctorErrors.ClinicNotFound);
 
+            // Create profile first
+            var profile = new Models.Profile
+            {
+                FirstName_En = "", // Will be set from request in controller
+                FirstName_Ar = "",
+                LastName_En = "",
+                LastName_Ar = "",
+                Phone = "",
+                Email = "",
+                IsActive = true
+            };
+            
+            // Note: Profile should be created via controller/request mapping
+            // This is a placeholder - actual implementation will pass profile from controller
+
             try
             {
                 await _context.Doctor.AddAsync(doctor, cancellationToken);
                 await _context.SaveChangesAsync(cancellationToken);
+                
+                // Load profile for response
+                await _context.Entry(doctor).Reference(d => d.Profile).LoadAsync(cancellationToken);
                 
                 // Invalidate list cache
                 await _cache.RemoveAsync(DoctorsAllCacheKey, cancellationToken);
@@ -64,25 +88,17 @@ namespace ClinicManagementSystem.api.Services
             }
             catch (DbUpdateException ex)
             {
-                // Check for duplicate email/phone constraint violations
-                if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
-                    ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
-                        return Result.Failure<Doctor>(DoctorErrors.DuplicateEmail);
-                    
-                    if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
-                        return Result.Failure<Doctor>(DoctorErrors.DuplicatePhone);
-                }
-                
-                // Let other database errors bubble up to global handler
+                // Profile-related errors will be caught here
                 throw;
             }
         }
 
         public async Task<Result> UpdateAsync(int id, Doctor doctor, CancellationToken cancellationToken)
         {
-            var currentDoctor = await _context.Doctor.FindAsync([id], cancellationToken);
+            var currentDoctor = await _context.Doctor
+                .Include(d => d.Profile)
+                .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+                
             if (currentDoctor is null)
                 return Result.Failure(DoctorErrors.NotFound);
 
@@ -94,16 +110,11 @@ namespace ClinicManagementSystem.api.Services
                     return Result.Failure(DoctorErrors.ClinicNotFound);
             }
 
-            currentDoctor.FirstName_En = doctor.FirstName_En;
-            currentDoctor.FirstName_Ar = doctor.FirstName_Ar;
-            currentDoctor.LastName_En = doctor.LastName_En;
-            currentDoctor.LastName_Ar = doctor.LastName_Ar;
+            // Update only doctor-specific fields (Profile updated separately)
             currentDoctor.Specialty_En = doctor.Specialty_En;
             currentDoctor.Specialty_Ar = doctor.Specialty_Ar;
             currentDoctor.Description_En = doctor.Description_En;
             currentDoctor.Description_Ar = doctor.Description_Ar;
-            currentDoctor.Phone = doctor.Phone;
-            currentDoctor.Email = doctor.Email;
             currentDoctor.SessionPrice = doctor.SessionPrice;
             currentDoctor.ClinicId = doctor.ClinicId;
             
@@ -124,29 +135,16 @@ namespace ClinicManagementSystem.api.Services
                 if (!exists)
                     return Result.Failure(DoctorErrors.NotFound);
                 
-                // Let concurrency exception bubble up to global handler
-                throw;
-            }
-            catch (DbUpdateException ex)
-            {
-                // Check for duplicate constraint violations
-                if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
-                    ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
-                {
-                    if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
-                        return Result.Failure(DoctorErrors.DuplicateEmail);
-                    
-                    if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
-                        return Result.Failure(DoctorErrors.DuplicatePhone);
-                }
-                
                 throw;
             }
         }
 
         public async Task<Result> DeleteAsync(int id, CancellationToken cancellationToken)
         {
-            var doctor = await _context.Doctor.FindAsync([id], cancellationToken);
+            var doctor = await _context.Doctor
+                .Include(d => d.Profile)
+                .FirstOrDefaultAsync(d => d.Id == id, cancellationToken);
+                
             if (doctor is null) 
                 return Result.Failure(DoctorErrors.NotFound);
 

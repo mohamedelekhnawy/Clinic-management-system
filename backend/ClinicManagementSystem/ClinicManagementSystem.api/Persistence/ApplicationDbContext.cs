@@ -13,6 +13,7 @@ namespace ClinicManagementSystem.api.Persistence
             _httpContextAccessor = httpContextAccessor;
         }
 
+        public DbSet<Profile> Profiles { get; set; } = null!;
         public DbSet<Clinic> Clinics { get; set; } = null!;
         public DbSet<Doctor> Doctor { get; set; } = null!;
         public DbSet<Patient> Patients { get; set; } = null!;

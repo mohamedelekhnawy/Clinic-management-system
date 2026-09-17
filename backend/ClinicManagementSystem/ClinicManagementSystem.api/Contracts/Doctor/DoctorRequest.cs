@@ -1,20 +1,15 @@
-﻿namespace ClinicManagementSystem.api.Contracts.Doctor
+﻿using ClinicManagementSystem.api.Contracts.Profile;
+
+namespace ClinicManagementSystem.api.Contracts.Doctor
 {
     public record DoctorRequest(
         int ClinicId,
-        string FirstName_En,
-        string FirstName_Ar,
-        string LastName_En,
-        string LastName_Ar,
+        ProfileRequest Profile,
         string Specialty_En,
         string Specialty_Ar,
         string Description_En,
         string Description_Ar,
-        string Phone,
-        string Email,
-        decimal SessionPrice,
-        DateTime CreatedAt,
-        DateTime UpdatedAt
+        decimal SessionPrice
     );
 
 }

@@ -1,15 +1,11 @@
-﻿using ClinicManagementSystem.api.Contracts.Profile;
-
 namespace ClinicManagementSystem.api.Contracts.Authentication
 {
-    public record AuthResponse(
+    public record LoginResponse(
         string Id,
-        string? Email,
-        ProfileResponse? Profile,
+        string Email,
         string Token,
         int ExpiresIn,
         string RefreshToken,
         DateTime RefreshTokenExpiration
     );
-
 }

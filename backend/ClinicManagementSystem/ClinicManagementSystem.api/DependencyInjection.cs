@@ -149,6 +149,7 @@ namespace ClinicManagementSystem.api
             services.AddScoped<IAppointmentService, AppointmentService>();
             services.AddScoped<IEmailService, EmailService>();
             services.AddScoped<IUserService, UserService>();
+            services.AddScoped<IProfileService, ProfileService>();
 
             return services;
         }

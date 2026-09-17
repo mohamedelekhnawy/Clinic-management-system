@@ -2,10 +2,11 @@ using Microsoft.Extensions.Caching.Hybrid;
 
 namespace ClinicManagementSystem.api.Services;
 
-public class AssistantService(ApplicationDbContext context, HybridCache cache) : IAssistantService
+public class AssistantService(ApplicationDbContext context, HybridCache cache, IProfileService profileService) : IAssistantService
 {
     private readonly ApplicationDbContext _context = context;
     private readonly HybridCache _cache = cache;
+    private readonly IProfileService _profileService = profileService;
     private const string AssistantsAllCacheKey = "assistants:all";
     private static string GetAssistantCacheKey(int id) => $"assistant:{id}";
     private static string GetAssistantsByClinicCacheKey(int clinicId) => $"assistants:clinic:{clinicId}";
@@ -16,6 +17,7 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
             AssistantsAllCacheKey,
             async cancel => await _context.Assistants
                 .Include(a => a.Clinic)
+                .Include(a => a.Profile)
                 .AsNoTracking()
                 .OrderByDescending(a => a.CreatedOn)
                 .ToListAsync(cancel),
@@ -36,6 +38,7 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
             GetAssistantCacheKey(id),
             async cancel => await _context.Assistants
                 .Include(a => a.Clinic)
+                .Include(a => a.Profile)
                 .FirstOrDefaultAsync(a => a.Id == id, cancel),
             new HybridCacheEntryOptions
             {
@@ -57,13 +60,17 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
         if (!clinicExists)
             return Result.Failure<Models.Assistant>(AssistantErrors.ClinicNotFound);
 
+        // Note: Profile should be created and assigned from controller
+        // This assumes ProfileId is already set on assistant entity
+
         try
         {
             await _context.Assistants.AddAsync(assistant, cancellationToken);
             await _context.SaveChangesAsync(cancellationToken);
 
-            // Load clinic for response
+            // Load clinic and profile for response
             await _context.Entry(assistant).Reference(a => a.Clinic).LoadAsync(cancellationToken);
+            await _context.Entry(assistant).Reference(a => a.Profile).LoadAsync(cancellationToken);
 
             // Invalidate caches
             await _cache.RemoveAsync(AssistantsAllCacheKey, cancellationToken);
@@ -71,27 +78,19 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
 
             return Result.Success(assistant);
         }
-        catch (DbUpdateException ex)
+        catch (DbUpdateException)
         {
-            // Check for duplicate email/phone constraint violations
-            if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
-                ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure<Models.Assistant>(AssistantErrors.DuplicateEmail);
-
-                if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure<Models.Assistant>(AssistantErrors.DuplicatePhone);
-            }
-
-            // Let other database errors bubble up to global handler
+            // Profile-related errors will be caught here
             throw;
         }
     }
 
     public async Task<Result> UpdateAsync(int id, Models.Assistant assistant, CancellationToken cancellationToken = default)
     {
-        var currentAssistant = await _context.Assistants.FindAsync([id], cancellationToken);
+        var currentAssistant = await _context.Assistants
+            .Include(a => a.Profile)
+            .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
+            
         if (currentAssistant is null)
             return Result.Failure(AssistantErrors.NotFound);
 
@@ -106,14 +105,8 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
                 return Result.Failure(AssistantErrors.ClinicNotFound);
         }
 
+        // Update only assistant-specific fields (Profile updated separately)
         currentAssistant.ClinicId = assistant.ClinicId;
-        currentAssistant.FirstName_En = assistant.FirstName_En;
-        currentAssistant.FirstName_Ar = assistant.FirstName_Ar;
-        currentAssistant.LastName_En = assistant.LastName_En;
-        currentAssistant.LastName_Ar = assistant.LastName_Ar;
-        currentAssistant.Phone = assistant.Phone;
-        currentAssistant.Email = assistant.Email;
-        currentAssistant.IsActive = assistant.IsActive;
 
         try
         {
@@ -138,22 +131,6 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
             var exists = await _context.Assistants.AnyAsync(a => a.Id == id, cancellationToken);
             if (!exists)
                 return Result.Failure(AssistantErrors.NotFound);
-
-            // Let concurrency exception bubble up to global handler
-            throw;
-        }
-        catch (DbUpdateException ex)
-        {
-            // Check for duplicate constraint violations
-            if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
-                ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                if (ex.InnerException?.Message.Contains("Email", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure(AssistantErrors.DuplicateEmail);
-
-                if (ex.InnerException?.Message.Contains("Phone", StringComparison.OrdinalIgnoreCase) == true)
-                    return Result.Failure(AssistantErrors.DuplicatePhone);
-            }
 
             throw;
         }
@@ -181,7 +158,7 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
         }
         catch (DbUpdateException ex)
         {
-            // Check for foreign key constraint violations (e.g., assistant has related records)
+            // Check for foreign key constraint violations
             if (ex.InnerException?.Message.Contains("REFERENCE", StringComparison.OrdinalIgnoreCase) == true ||
                 ex.InnerException?.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase) == true)
             {
@@ -198,6 +175,7 @@ public class AssistantService(ApplicationDbContext context, HybridCache cache) :
             GetAssistantsByClinicCacheKey(clinicId),
             async cancel => await _context.Assistants
                 .Include(a => a.Clinic)
+                .Include(a => a.Profile)
                 .AsNoTracking()
                 .Where(a => a.ClinicId == clinicId)
                 .OrderByDescending(a => a.CreatedOn)

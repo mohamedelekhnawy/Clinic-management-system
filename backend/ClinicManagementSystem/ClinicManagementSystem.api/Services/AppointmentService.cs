@@ -23,7 +23,9 @@ public class AppointmentService(ApplicationDbContext context, IConfiguration con
     {
         var query = _context.Appointments
             .Include(a => a.Patient)
+                .ThenInclude(p => p.Profile)
             .Include(a => a.Doctor)
+                .ThenInclude(d => d.Profile)
             .AsNoTracking();
 
         if (doctorId.HasValue)
@@ -50,7 +52,9 @@ public class AppointmentService(ApplicationDbContext context, IConfiguration con
     {
         var appointment = await _context.Appointments
             .Include(a => a.Patient)
+                .ThenInclude(p => p.Profile)
             .Include(a => a.Doctor)
+                .ThenInclude(d => d.Profile)
             .FirstOrDefaultAsync(a => a.Id == id, cancellationToken);
 
         return appointment is null
@@ -71,7 +75,9 @@ public class AppointmentService(ApplicationDbContext context, IConfiguration con
 
         var created = await _context.Appointments
             .Include(a => a.Patient)
+                .ThenInclude(p => p.Profile)
             .Include(a => a.Doctor)
+                .ThenInclude(d => d.Profile)
             .FirstAsync(a => a.Id == appointment.Id, cancellationToken);
 
         return Result.Success(created);
@@ -228,6 +234,7 @@ public class AppointmentService(ApplicationDbContext context, IConfiguration con
 
         var current = await _context.Appointments
             .Include(a => a.Patient)
+                .ThenInclude(p => p.Profile)
             .AsNoTracking()
             .Where(a => a.DoctorId == doctorId &&
                         a.AppointmentDate == date &&
@@ -236,6 +243,7 @@ public class AppointmentService(ApplicationDbContext context, IConfiguration con
 
         var waiting = await _context.Appointments
             .Include(a => a.Patient)
+                .ThenInclude(p => p.Profile)
             .AsNoTracking()
             .Where(a => a.DoctorId == doctorId &&
                         a.AppointmentDate == date &&

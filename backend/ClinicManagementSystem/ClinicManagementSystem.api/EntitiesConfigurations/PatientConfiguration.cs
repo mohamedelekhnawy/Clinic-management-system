@@ -1,4 +1,4 @@
-using ClinicManagementSystem.api.Models;
+﻿using ClinicManagementSystem.api.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
@@ -12,46 +12,12 @@ public class PatientConfiguration : IEntityTypeConfiguration<Patient>
 
         builder.HasKey(p => p.Id);
 
-        builder.Property(p => p.FirstName_En)
-            .IsRequired()
-            .HasMaxLength(100);
-
-        builder.Property(p => p.FirstName_Ar)
-            .IsRequired()
-            .HasMaxLength(100);
-
-        builder.Property(p => p.LastName_En)
-            .IsRequired()
-            .HasMaxLength(100);
-
-        builder.Property(p => p.LastName_Ar)
-            .IsRequired()
-            .HasMaxLength(100);
-
         builder.Property(p => p.DateOfBirth)
             .IsRequired();
 
         builder.Property(p => p.Gender)
             .IsRequired()
             .HasConversion<int>();
-
-        builder.Property(p => p.Phone)
-            .IsRequired()
-            .HasMaxLength(11);
-
-        // Create unique index on Phone
-        builder.HasIndex(p => p.Phone)
-            .IsUnique()
-            .HasDatabaseName("IX_Patients_Phone");
-
-        builder.Property(p => p.Email)
-            .HasMaxLength(200);
-
-        // Create unique index on Email (filtered for non-null values)
-        builder.HasIndex(p => p.Email)
-            .IsUnique()
-            .HasDatabaseName("IX_Patients_Email")
-            .HasFilter("[Email] IS NOT NULL");
 
         builder.Property(p => p.Address_En)
             .HasMaxLength(500);
@@ -68,9 +34,18 @@ public class PatientConfiguration : IEntityTypeConfiguration<Patient>
         builder.Property(p => p.Notes)
             .HasMaxLength(2000);
 
-        builder.Property(p => p.IsActive)
-            .IsRequired()
-            .HasDefaultValue(true);
+        // Configure ProfileId foreign key
+        builder.Property(p => p.ProfileId)
+            .IsRequired();
+
+        builder.HasIndex(p => p.ProfileId)
+            .IsUnique()
+            .HasDatabaseName("IX_Patients_ProfileId");
+
+        builder.HasOne(p => p.Profile)
+            .WithOne()
+            .HasForeignKey<Patient>(p => p.ProfileId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Auditable fields
         builder.Property(p => p.CreatedOn)

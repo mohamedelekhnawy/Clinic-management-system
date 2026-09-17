@@ -4,25 +4,19 @@
     {
         public void Configure(EntityTypeBuilder<ApplicationUser> builder)
         {
-            builder.Property(c => c.FirstName_EN)
-                .IsRequired()
-                .HasMaxLength(100);
-            
-            builder.Property(c => c.FirstName_AR)
-                .IsRequired(false)
-                .HasMaxLength(100);
+            // Configure ProfileId foreign key
+            builder.Property(u => u.ProfileId)
+                .IsRequired(false);
 
-            builder.Property(c => c.LastName_EN)
-                .IsRequired()
-                .HasMaxLength(100);
-            
-            builder.Property(c => c.LastName_AR)
-                .IsRequired(false)
-                .HasMaxLength(100);
-            
-            // Ignore computed properties
-            builder.Ignore(c => c.FirstName);
-            builder.Ignore(c => c.LastName);
+            builder.HasIndex(u => u.ProfileId)
+                .IsUnique()
+                .HasFilter("[ProfileId] IS NOT NULL");
+
+            builder.HasOne(u => u.Profile)
+                .WithOne(p => p.ApplicationUser)
+                .HasForeignKey<ApplicationUser>(u => u.ProfileId)
+                .OnDelete(DeleteBehavior.Restrict)
+                .IsRequired(false);
 
             builder.OwnsMany(u => u.RefreshTokens, rt =>
             {
@@ -52,6 +46,10 @@
                 rt.HasIndex(t => t.Token)
                     .IsUnique();
             });
+
+            // Prevent automatic loading of RefreshTokens collection
+            builder.Navigation(u => u.RefreshTokens)
+                .AutoInclude(false);
         }
     }
 }

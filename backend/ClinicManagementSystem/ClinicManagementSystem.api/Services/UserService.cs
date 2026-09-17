@@ -8,15 +8,33 @@ namespace ClinicManagementSystem.api.Services
 
         public async Task<Result<UserProfileResponse>> GetProfileAsync(string userId, CancellationToken cancellationToken = default)
         {
-            var user = await _userManager.Users
+            // Use projection to reduce database load
+            var response = await _userManager.Users
                 .Where(x => x.Id == userId)
-                .ProjectToType<UserProfileResponse>()
+                .Select(user => new UserProfileResponse(
+                    user.Id,
+                    user.Email!,
+                    user.IsEmailVerified,
+                    user.EmailVerifiedAt,
+                    user.Profile != null ? new ProfileResponse(
+                        user.Profile.Id,
+                        user.Profile.FirstName_En,
+                        user.Profile.FirstName_Ar,
+                        user.Profile.LastName_En,
+                        user.Profile.LastName_Ar,
+                        user.Profile.Phone,
+                        user.Profile.Email,
+                        user.Profile.IsActive,
+                        user.Profile.CreatedOn,
+                        user.Profile.UpdatedOn
+                    ) : null
+                ))
                 .SingleOrDefaultAsync(cancellationToken);
 
-            if (user is null)
+            if (response is null)
                 return Result.Failure<UserProfileResponse>(AuthErrors.UserNotFound);
 
-            return Result.Success(user);
+            return Result.Success(response);
         }
     }
 }

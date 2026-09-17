@@ -153,8 +153,8 @@ public class AppointmentsController(IAppointmentService appointmentService) : Co
 
         var response = new QueueResponse(
             doctorId,
-            $"{doctor.FirstName_En} {doctor.LastName_En}",
-            $"{doctor.FirstName_Ar} {doctor.LastName_Ar}",
+            $"{doctor.Profile.FirstName_En} {doctor.Profile.LastName_En}",
+            $"{doctor.Profile.FirstName_Ar} {doctor.Profile.LastName_Ar}",
             currentResponse,
             waitingResponse,
             queue.TotalWaiting,
@@ -177,11 +177,11 @@ public class AppointmentsController(IAppointmentService appointmentService) : Co
     private static AppointmentResponse MapToResponse(Appointment a) => new(
         a.Id,
         a.PatientId,
-        $"{a.Patient.FirstName_En} {a.Patient.LastName_En}",
-        $"{a.Patient.FirstName_Ar} {a.Patient.LastName_Ar}",
+        $"{a.Patient.Profile.FirstName_En} {a.Patient.Profile.LastName_En}",
+        $"{a.Patient.Profile.FirstName_Ar} {a.Patient.Profile.LastName_Ar}",
         a.DoctorId,
-        $"{a.Doctor.FirstName_En} {a.Doctor.LastName_En}",
-        $"{a.Doctor.FirstName_Ar} {a.Doctor.LastName_Ar}",
+        $"{a.Doctor.Profile.FirstName_En} {a.Doctor.Profile.LastName_En}",
+        $"{a.Doctor.Profile.FirstName_Ar} {a.Doctor.Profile.LastName_Ar}",
         a.AppointmentDate,
         a.StartTime,
         a.EndTime,
@@ -197,8 +197,8 @@ public class AppointmentsController(IAppointmentService appointmentService) : Co
     private static QueueItemResponse MapToQueueItem(Appointment a, int positionInQueue) => new(
         a.Id,
         a.PatientId,
-        $"{a.Patient.FirstName_En} {a.Patient.LastName_En}",
-        $"{a.Patient.FirstName_Ar} {a.Patient.LastName_Ar}",
+        $"{a.Patient.Profile.FirstName_En} {a.Patient.Profile.LastName_En}",
+        $"{a.Patient.Profile.FirstName_Ar} {a.Patient.Profile.LastName_Ar}",
         a.StartTime,
         a.CheckedInAt ?? DateTime.MinValue,
         positionInQueue

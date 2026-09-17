@@ -3,6 +3,8 @@ using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using ClinicManagementSystem.api.Contracts.Profile;
+using ClinicManagementSystem.api.Persistence;
 
 namespace ClinicManagementSystem.api.Services
 {
@@ -11,32 +13,35 @@ namespace ClinicManagementSystem.api.Services
         IJwtProvider jwtProvider,
         IEmailService emailService,
         IBackgroundJobClient backgroundJobClient,
+        ApplicationDbContext context,
         ILogger<AuthService> logger) : IAuthService
     {
         private readonly UserManager<ApplicationUser> _userManager = userManager;
         private readonly IJwtProvider _jwtProvider = jwtProvider;
         private readonly IEmailService _emailService = emailService;
         private readonly IBackgroundJobClient _backgroundJobClient = backgroundJobClient;
+        private readonly ApplicationDbContext _context = context;
         private readonly ILogger<AuthService> _logger = logger;
 
-        public async Task<Result<AuthResponse>> GetTokenAsync(string email, string password, CancellationToken cancellationToken = default)
+        public async Task<Result<LoginResponse>> GetTokenAsync(string email, string password, CancellationToken cancellationToken = default)
         {
+            // Find user by email - RefreshTokens won't be loaded due to AutoInclude(false) in UserConfiguration
             var user = await _userManager.Users
-                .Include(u => u.RefreshTokens)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.Email == email, cancellationToken);
 
             if (user is null)
-                return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
+                return Result.Failure<LoginResponse>(AuthErrors.InvalidCredentials);
 
+            // Password verification is intentionally slow (~100-300ms) for security (PBKDF2 hashing)
             var isPasswordValid = await _userManager.CheckPasswordAsync(user, password);
             if (!isPasswordValid)
-                return Result.Failure<AuthResponse>(AuthErrors.InvalidCredentials);
+                return Result.Failure<LoginResponse>(AuthErrors.InvalidCredentials);
 
-            // Check if email is verified
             if (!user.IsEmailVerified)
             {
                 _logger.LogWarning("Login attempt for unverified email: {Email}", email);
-                return Result.Failure<AuthResponse>(AuthErrors.EmailNotVerified);
+                return Result.Failure<LoginResponse>(AuthErrors.EmailNotVerified);
             }
 
             try
@@ -45,70 +50,66 @@ namespace ClinicManagementSystem.api.Services
                 var refreshToken = _jwtProvider.GenerateRefreshToken();
                 var refreshTokenExpiration = DateTime.UtcNow.AddDays(7);
 
-                user.RefreshTokens.Add(new RefreshToken
-                {
-                    Token = refreshToken,
-                    ExpiresOn = refreshTokenExpiration,
-                    CreatedOn = DateTime.UtcNow
-                });
-
-                await _userManager.UpdateAsync(user);
+                // Insert refresh token directly without loading the collection
+                await _context.Database.ExecuteSqlRawAsync(
+                    @"INSERT INTO RefreshTokens (UserId, Token, ExpiresOn, CreatedOn) 
+                      VALUES ({0}, {1}, {2}, {3})",
+                    user.Id, refreshToken, refreshTokenExpiration, DateTime.UtcNow);
 
                 _logger.LogInformation("User {UserId} logged in successfully", user.Id);
 
-                var response = new AuthResponse(user.Id, user.Email, user.FirstName_EN, user.FirstName_AR, user.LastName_EN, user.LastName_AR, token, expiresIn, refreshToken, refreshTokenExpiration);
-                return Result.Success(response);
+                return Result.Success(new LoginResponse(user.Id, user.Email!, token, expiresIn, refreshToken, refreshTokenExpiration));
             }
             catch (DbUpdateException)
             {
-                // Let database errors bubble up to global handler
                 throw;
             }
         }
 
-        public async Task<Result<VerificationResponse>> RegisterAsync(string firstNameEN, string? firstNameAR, string lastNameEN, string? lastNameAR, string email, string password, CancellationToken cancellationToken = default)
+        public async Task<Result<RegisterResponse>> RegisterAsync(string firstNameEN, string? firstNameAR, string lastNameEN, string? lastNameAR, string email, string password, CancellationToken cancellationToken = default)
         {
+            // Check if email already exists - RefreshTokens won't be loaded due to AutoInclude(false)
             var existingUser = await _userManager.FindByEmailAsync(email);
             if (existingUser is not null)
-                return Result.Failure<VerificationResponse>(AuthErrors.EmailAlreadyExists);
+                return Result.Failure<RegisterResponse>(AuthErrors.EmailAlreadyExists);
 
+            // Generate verification code upfront before user creation
+            var verificationCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+            var expirationTime = DateTime.UtcNow.AddMinutes(15);
+            var currentTime = DateTime.UtcNow;
+
+            // Initialize user with all fields including verification data to avoid extra UpdateAsync
             var user = new ApplicationUser
             {
-                FirstName_EN = firstNameEN,
-                FirstName_AR = firstNameAR,
-                LastName_EN = lastNameEN,
-                LastName_AR = lastNameAR,
                 Email = email,
                 UserName = email,
-                IsEmailVerified = false
+                IsEmailVerified = false,
+                EmailVerificationCode = verificationCode,
+                EmailVerificationCodeExpiresAt = expirationTime,
+                LastVerificationCodeSentAt = currentTime
             };
 
             try
             {
+                // Password hashing happens here (~200-400ms, intentional for security)
                 var result = await _userManager.CreateAsync(user, password);
                 if (!result.Succeeded)
                 {
                     var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-                    return Result.Failure<VerificationResponse>(new Error("Auth.RegistrationFailed", errors, ErrorType.Validation));
+                    return Result.Failure<RegisterResponse>(new Error("Auth.RegistrationFailed", errors, ErrorType.Validation));
                 }
 
-                // Generate secure 6-digit OTP using RandomNumberGenerator
-                var verificationCode = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-                var expirationTime = DateTime.UtcNow.AddMinutes(15);
-
-                user.EmailVerificationCode = verificationCode;
-                user.EmailVerificationCodeExpiresAt = expirationTime;
-                user.LastVerificationCodeSentAt = DateTime.UtcNow;
-
-                await _userManager.UpdateAsync(user);
-
-                // Enqueue verification email as a Hangfire background job — HTTP request returns immediately
+                // Enqueue verification email as Hangfire background job
                 _backgroundJobClient.Enqueue<IEmailService>(
-                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.FirstName, verificationCode, CancellationToken.None));
-                _logger.LogInformation("Verification email job enqueued for {Email}, user {UserId}", user.Email, user.Id);
+                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.Email!, verificationCode, CancellationToken.None));
+                
+                _logger.LogInformation("User {UserId} registered successfully. Verification email job enqueued for {Email}", user.Id, user.Email);
 
-                var response = new VerificationResponse("Registration successful. Please check your email for verification code.");
-                return Result.Success(response);
+                return Result.Success(new RegisterResponse(
+                    user.Id,
+                    user.Email!,
+                    "Registration successful. Please check your email for verification code."
+                ));
             }
             catch (DbUpdateException ex)
             {
@@ -116,10 +117,9 @@ namespace ClinicManagementSystem.api.Services
                 if (ex.InnerException?.Message.Contains("duplicate", StringComparison.OrdinalIgnoreCase) == true ||
                     ex.InnerException?.Message.Contains("unique", StringComparison.OrdinalIgnoreCase) == true)
                 {
-                    return Result.Failure<VerificationResponse>(AuthErrors.EmailAlreadyExists);
+                    return Result.Failure<RegisterResponse>(AuthErrors.EmailAlreadyExists);
                 }
                 
-                // Let other database errors bubble up to global handler
                 throw;
             }
         }
@@ -165,37 +165,41 @@ namespace ClinicManagementSystem.api.Services
             }
         }
 
-        public async Task<Result<AuthResponse>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
+        public async Task<Result<RefreshTokenResponse>> RefreshTokenAsync(string token, string refreshToken, CancellationToken cancellationToken = default)
         {
             var principal = _jwtProvider.ValidateToken(token);
             if (principal is null)
-                return Result.Failure<AuthResponse>(AuthErrors.InvalidToken);
+                return Result.Failure<RefreshTokenResponse>(AuthErrors.InvalidToken);
 
             var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) 
                 ?? principal.FindFirstValue(System.IdentityModel.Tokens.Jwt.JwtRegisteredClaimNames.Sub);
             
             if (string.IsNullOrEmpty(userId))
-                return Result.Failure<AuthResponse>(AuthErrors.InvalidToken);
+                return Result.Failure<RefreshTokenResponse>(AuthErrors.InvalidToken);
 
+            // Load user with only the specific refresh token we need
             var user = await _userManager.Users
-                .Include(u => u.RefreshTokens)
+                .Include(u => u.RefreshTokens.Where(rt => rt.Token == refreshToken))
                 .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
 
             if (user is null)
-                return Result.Failure<AuthResponse>(AuthErrors.UserNotFound);
+                return Result.Failure<RefreshTokenResponse>(AuthErrors.UserNotFound);
 
-            var userRefreshToken = user.RefreshTokens.FirstOrDefault(rt => rt.Token == refreshToken);
+            var userRefreshToken = user.RefreshTokens.FirstOrDefault();
             if (userRefreshToken is null || !userRefreshToken.IsActive)
-                return Result.Failure<AuthResponse>(AuthErrors.InvalidRefreshToken);
+                return Result.Failure<RefreshTokenResponse>(AuthErrors.InvalidRefreshToken);
 
             try
             {
+                // Revoke old token
                 userRefreshToken.RevokedOn = DateTime.UtcNow;
 
+                // Generate new tokens
                 var (newToken, expiresIn) = _jwtProvider.GenerateToken(user);
                 var newRefreshToken = _jwtProvider.GenerateRefreshToken();
                 var newRefreshTokenExpiration = DateTime.UtcNow.AddDays(7);
 
+                // Add new refresh token to user's collection
                 user.RefreshTokens.Add(new RefreshToken
                 {
                     Token = newRefreshToken,
@@ -205,7 +209,7 @@ namespace ClinicManagementSystem.api.Services
 
                 await _userManager.UpdateAsync(user);
 
-                var response = new AuthResponse(user.Id, user.Email, user.FirstName_EN, user.FirstName_AR, user.LastName_EN, user.LastName_AR, newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
+                var response = new RefreshTokenResponse(newToken, expiresIn, newRefreshToken, newRefreshTokenExpiration);
                 return Result.Success(response);
             }
             catch (DbUpdateException)
@@ -217,20 +221,21 @@ namespace ClinicManagementSystem.api.Services
 
         public async Task<Result> RevokeRefreshTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
         {
+            // Query user with only the specific token we need
             var user = await _userManager.Users
-                .Include(u => u.RefreshTokens)
+                .Include(u => u.RefreshTokens.Where(rt => rt.Token == refreshToken))
                 .FirstOrDefaultAsync(u => u.RefreshTokens.Any(rt => rt.Token == refreshToken), cancellationToken);
 
             if (user is null)
                 return Result.Failure(AuthErrors.InvalidRefreshToken);
 
-            var userRefreshToken = user.RefreshTokens.FirstOrDefault(rt => rt.Token == refreshToken);
-            if (userRefreshToken is null || !userRefreshToken.IsActive)
+            var tokenToRevoke = user.RefreshTokens.FirstOrDefault();
+            if (tokenToRevoke is null || !tokenToRevoke.IsActive)
                 return Result.Failure(AuthErrors.InvalidRefreshToken);
 
             try
             {
-                userRefreshToken.RevokedOn = DateTime.UtcNow;
+                tokenToRevoke.RevokedOn = DateTime.UtcNow;
                 await _userManager.UpdateAsync(user);
 
                 return Result.Success();
@@ -275,9 +280,9 @@ namespace ClinicManagementSystem.api.Services
 
                 await _userManager.UpdateAsync(user);
 
-                // Enqueue verification email as a Hangfire background job — HTTP request returns immediately
+                // Enqueue verification email as a Hangfire background job
                 _backgroundJobClient.Enqueue<IEmailService>(
-                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.FirstName, verificationCode, CancellationToken.None));
+                    emailService => emailService.SendVerificationCodeAsync(user.Email!, user.Email!, verificationCode, CancellationToken.None));
                 _logger.LogInformation("Verification email job enqueued for {Email}, user {UserId}", user.Email, user.Id);
 
                 var response = new VerificationResponse("Verification code sent. Please check your email.");
